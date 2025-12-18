@@ -470,4 +470,78 @@ Architecture: Recorder/Experiment/ExpManager abstract base classes (raise NotImp
 Current only MLflow impl.
 Abstract layers → future new classes (e.g., WandBRecorder) switch backends, upper R unchanged.Though only MLflow now, workflow designed for multi-backend abstraction (weak but clear intent).
 
+Explanation of RecorderWrapper (With Full Context from qlib.init Code)python
 
+  class RecorderWrapper(Wrapper):
+      """
+      Wrapper class for QlibRecorder, which detects whether users reinitialize qlib when already starting an experiment.
+      """
+  
+      def register(self, provider):
+          if self._provider is not None:
+              expm = getattr(self._provider, "exp_manager")
+              if expm.active_experiment is not None:
+                  raise RecorderInitializationError(
+                      "Please don't reinitialize Qlib if QlibRecorder is already activated. Otherwise, the experiment stored location will be modified."
+                  )
+          self._provider = provider
+  
+  Core PurposeRecorderWrapper is a safety mechanism that prevents catastrophic data corruption by blocking reinitialization of Qlib (qlib.init()) while an experiment is actively running (i.e., inside a with R.start() block).The Critical Problem It SolvesQlib's experiment storage location (MLflow tracking URI, default ./mlruns or custom path) is configured during qlib.init().From your init code:python
+  
+  def init(default_conf="client", **kwargs):
+      ...
+      C.set(default_conf, **kwargs)  # ← Sets global config, including exp_manager.uri
+      ...
+      C.register()                   # ← Creates ExpManager using current URI
+  
+  Once initialized, all R.start() experiments save logs/artifacts to that URI.Dangerous scenario (very common mistake):python
+  
+  with R.start(experiment_name="crypto_strategy"):
+      R.log_metrics(IC=0.08)
+      
+      # User accidentally calls init again with different URI
+      qlib.init(mlflow_uri="/tmp/temp_experiments")  # ← Changes global URI mid-experiment!
+  
+      R.log_metrics(IC=0.12)  # ← Now logs go to completely different folder!
+  
+  Result:One logical experiment split across two unrelated mlruns directories.
+  Artifacts/metrics fragmented → impossible to analyze properly.
+  Silent failure — hard to debug, destroys reproducibility.
+  
+  How RecorderWrapper Prevents ThisThe global R is not a plain QlibRecorder — it's wrapped:python
+  
+  R = RecorderWrapper()  # Global R is this wrapper
+  
+  During qlib.init(), this happens (from C.register() in config code):python
+  
+  exp_manager = init_instance_by_config(self["exp_manager"])  # Create ExpManager with current URI
+  qr = QlibRecorder(exp_manager)
+  R.register(qr)  # ← Calls the wrapper's register method!
+  
+  Step-by-step execution of register(provider):if self._provider is not None:
+  → Checks if Qlib has already been initialized (a previous QlibRecorder instance exists).
+  If yes → expm = getattr(self._provider, "exp_manager")
+  → Accesses the current experiment manager.
+  if expm.active_experiment is not None:
+  → Checks if an experiment is currently active (i.e., inside with R.start()).
+  If both true → raises RecorderInitializationError immediately:"Please don't reinitialize Qlib if QlibRecorder is already activated. Otherwise, the experiment stored location will be modified."
+  
+  Only if safe → self._provider = provider
+  → Allows reinitialization (e.g., before any experiment starts).
+  
+  Real-World Protection ExamplesAllowed:python
+  
+  qlib.init(uri="path1")
+  qlib.init(uri="path2")  # No active experiment → safe (though not recommended)
+  
+  Blocked (protected):python
+  
+  with R.start("test"):  # ← active_experiment exists
+      qlib.init(uri="dangerous_new_path")  # ← Wrapper detects → raises error immediately
+  
+  Why This Is Excellent DesignFail-fast: Catches critical errors early with clear message.
+  Zero overhead: Only checked during init().
+  Preserves scientific integrity: Ensures one experiment = one consistent storage location.
+  User-friendly: Prevents silent, irreproducible disasters common in research code.
+  
+  
