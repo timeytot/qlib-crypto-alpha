@@ -55,11 +55,10 @@ This summary distills my in-depth understanding of Qlib's Workflow module, based
 
 
 
-## 解释代码
+import logging
 
-```python
-print("Hello")
-```
+logging.basicConfig(level=logging.INFO)
+logging.info("Hello")
 
 
 
