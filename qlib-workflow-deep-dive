@@ -52,6 +52,12 @@ Qlib Workflow Core Knowledge Summary (Advanced Mastery Level)
 
 This summary distills my in-depth understanding of Qlib's Workflow module, based on source code analysis and discussions. It demonstrates advanced technical proficiency in quantitative frameworks, experiment management, and concurrency safety. Ideal for showcasing in resumes, interviews, or projects in AI quantization and cryptocurrency/blockchain strategies.
 
+
+
+# Deep Dive into Qlib Workflow: Core Knowledge Summary (Advanced Mastery Level)
+
+This summary distills my in-depth understanding of Qlib's Workflow module, based on source code analysis and discussions. It demonstrates advanced technical proficiency in quantitative frameworks, experiment management, and concurrency safety. Ideal for showcasing in resumes, interviews, or projects in AI quantization and cryptocurrency/blockchain strategies.
+
 ## 1. Four-Layer Architecture and Responsibility Separation (ExpManager → Experiment → Recorder → R)
 - **ExpManager** (Global Experiment Manager, Singleton): Corresponds to the entire MLflow Tracking URI. Responsibilities: create/list/delete all Experiments, manage the current active_experiment, maintain tracking URI (including temporary switching).
 - **Experiment** (Individual Experiment Group): Corresponds to one MLflow Experiment. Responsibilities: manage all Recorders within this experiment, maintain active_recorder, perform search_runs scoped to this experiment.
@@ -59,32 +65,6 @@ This summary distills my in-depth understanding of Qlib's Workflow module, based
 - **R** (QlibRecorder, Global Facade Singleton): The sole user interaction entry point. All shortcut operations (log_metrics, save_objects, get_exp, start, etc.) are performed via R, which internally routes automatically to the current active_experiment → active_recorder.
 
 ## User Code Flow
-
-Qlib Workflow Core Knowledge Summary (Advanced Mastery Level)1. Core Class Hierarchy (From Bottom to Top)Recorder (Records a single run)
-Base class: Recorder
-Implementation: MLflowRecorder (the actual worker)
-One Recorder corresponds to one Run in MLflow.
-Provides methods: log_metrics, log_params, save_objects, load_object, log_artifact, etc.
-Experiment (Experiment grouping)
-Base class: Experiment
-Implementation: MLflowExperiment
-One Experiment contains multiple Recorders (multiple Runs).
-Only one active_recorder (the currently running Recorder) at a time.
-ExpManager (Experiment manager)
-Base class: ExpManager
-Implementation: MLflowExpManager
-Manages all Experiments.
-Maintains a global tracking URI (default loaded from Qlib config).
-Only one active_experiment at a time.
-QlibRecorder (Global singleton R)
-The top-level facade class; the object users actually interact with is R.
-Internally holds an ExpManager.
-Provides the most convenient context managers and shortcut methods.
-R (Global variable)
-R = RecorderWrapper(), a wrapped global object.
-All operations are invoked via R.xxx.
-
-User Code Flow
 
 User code
    │
@@ -106,8 +86,8 @@ All operations apply to the current active_recorder
    ▼
 with block ends or R.end_exp() → mlflow.end_run() + status marking
 
-Line-by-Line Explanation of This Codepython
-
+## Line-by-Line Explanation of This Code
+```python
 if pr.scheme == "file":
 
 Checks if the current MLflow tracking URI is a local file system backend (file:///path/to/mlruns).  
@@ -321,7 +301,8 @@ with R.start(experiment_name="LightGBM", recorder_name="v1"):
 # Exit with auto end, mark FINISHED
 
 @contextmanager
- RoleDecorates start() as context manager for elegant lifecycle via with R.start(...).Enter with → start_exp() (activate experiment + recorder + mlflow.start_run)
+ Role@contextmanager
+ turns start() generator into context manager with enter/exit powers.Enter with → start_exp() (activate experiment + recorder + mlflow.start_run)
 Inside with → user code; all R ops auto to current recorder
 Exit with → auto end_exp() + mlflow.end_run()
 Normal → FINISHED
@@ -333,7 +314,7 @@ with R.start(experiment_name="train_model"):
     R.save_objects(trained_model=model)
     rid = R.get_recorder().id
 
-Yes, affects the indented block under with R.start(...):python
+Yes, affects indented block under with R.start(...):python
 
     R.log_params(**flatten_dict(task))
     model.fit(dataset)
@@ -344,7 +325,7 @@ How it affects:
 Enter with (enter): R.start("train_model") called.
 Internal start_exp(): Acquire/create "train_model" Experiment; create new Recorder (Run); mlflow.start_run(); set as active_recorder.yield returns Recorder object.All with block code in "experiment context":R.log_params(...) → auto to current active_recorder
 model.fit(dataset) → pure training, but subsequent R ops associated
-R.save_objects(trained_model=model) → save model as current recorder artifact (auto pickle/upload)
+R.save_objects(...) → save model as current recorder artifact (auto pickle/upload)
 R.get_recorder().id → get current active_recorder run_id to rid
 
 No need pass ID/recorder object—runs in with block, R knows current experiment/recorder.Exit with (exit): Normal or model.fit() crash → auto end_exp()
@@ -381,7 +362,8 @@ Internal:python
 def log_metrics(self, **kwargs):
     self.get_exp(start=True).get_recorder(start=True).log_metrics(**kwargs)
 
-Auto finds current active recorder. Multiple actives → R.log_metrics() unknown which → force pass recorder object, poor experience. Qlib goal: common logging "zero-param, seamless" → must global one active recorder.Reason 3: Clear context semantics
+Auto finds current active recorder. Multiple actives → R.log_metrics() unknown which → force pass recorder object, poor experience. Qlib goal: common logging "zero-param, seamless" → must global one active recorder.
+Reason 3: Clear context semantics
 with R.start(...) means: "From now to block end, all experiment ops belong to this recorder". Nested with (multiple active) confuses semantics—outer logs go inner recorder.Where Can URI Be Changed? (Direct Evidence from Provided Code)Only place in provided code: QlibRecorder's context manager:python
 
     @contextmanager
@@ -478,6 +460,5 @@ Object-oriented interfaces (Recorder methods vs run_id everywhere)All absent in 
 Architecture: Recorder/Experiment/ExpManager abstract base classes (raise NotImplementedError methods).
 Current only MLflow impl.
 Abstract layers → future new classes (e.g., WandBRecorder) switch backends, upper R unchanged.Though only MLflow now, workflow designed for multi-backend abstraction (weak but clear intent).
-
 
 
