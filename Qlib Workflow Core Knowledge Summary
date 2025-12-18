@@ -41,9 +41,12 @@ Qlib Workflow Core Knowledge Summary (Advanced Mastery Level)
    Asynchronous Logging: log_params/metrics/set_tags use AsyncCaller for async upload; waits for completion before end_run to avoid blocking the main training thread.
    Additional Value-Added Features: Automatically logs git diff/status, sys.argv, QLIB environment variables; save_objects/load_object directly handle Python objects (auto-pickling).
 
-7. Overall Design Motivation (Superior to Native MLflow)Object-oriented (Recorder object instead of run_id strings)
-    Zero-parameter shortcut logging (R.log_xxx())
-    Automatic lifecycle management (with + exception safety)
-    Concurrency safety patches + rich convenience features
-    Potential support for multiple backends
+7. Overall Design Motivation (Superior to Native MLflow)
+  Object-oriented (Recorder object instead of run_id strings)
+  Zero-parameter shortcut logging (R.log_xxx())
+  Automatic lifecycle management (with + exception safety)
+  Concurrency safety patches + rich convenience features
+  Potential support for multiple backends
+
+
 
