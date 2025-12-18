@@ -35,7 +35,8 @@ Qlib Workflow Core Knowledge Summary (Advanced Mastery Level)
   Ensures resources are always released, status correctly marked, exception safety, and extremely concise code.
 
 6. 
-   Key Technical Detailsself.client: In MLflowExpManager, defined with @property to dynamically create MlflowClient(tracking_uri=self.uri), supporting temporary URI switching (via R.uri_context).
+   Key Technical Details.
+   self.client: In MLflowExpManager, defined with @property to dynamically create MlflowClient(tracking_uri=self.uri), supporting temporary URI switching (via R.uri_context).
    artifact_uri: Obtained from run.info.artifact_uri returned by mlflow.start_run(), format: file:///.../mlruns/<exp_id>/<run_id>/artifacts, determined by MLflow's underlying FileStore.
    get_local_dir(): Parses artifact_uri to obtain the local Run root directory (mlruns/<exp_id>/<run_id>/), primarily used for cleaning temporary files during load_object or manual artifact access for debugging.
    Asynchronous Logging: log_params/metrics/set_tags use AsyncCaller for async upload; waits for completion before end_run to avoid blocking the main training thread.
@@ -51,6 +52,14 @@ Qlib Workflow Core Knowledge Summary (Advanced Mastery Level)
 # Deep Dive into Qlib Workflow: Core Knowledge Summary (Advanced Mastery Level)
 
 This summary distills my in-depth understanding of Qlib's Workflow module, based on source code analysis and discussions. It demonstrates advanced technical proficiency in quantitative frameworks, experiment management, and concurrency safety. Ideal for showcasing in resumes, interviews, or projects in AI quantization and cryptocurrency/blockchain strategies.
+
+
+
+## Line-by-Line Explanation of This Code
+
+```python
+if pr.scheme == "file":
+    ...
 
 
 
