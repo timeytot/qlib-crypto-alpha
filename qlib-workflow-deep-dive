@@ -55,12 +55,10 @@ This summary distills my in-depth understanding of Qlib's Workflow module, based
 
 
 
-## Line-by-Line Explanation of This Code
+## 解释代码
 
 ```python
-if pr.scheme == "file":
-    # Local filesystem backend
-    ...
+print("Hello")
 ```
 
 
