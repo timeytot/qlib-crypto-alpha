@@ -1,0 +1,45 @@
+Qlib Workflow Core Knowledge Summary (Advanced Mastery Level)
+1. Four-Layer Architecture and Responsibility Separation (ExpManager → Experiment → Recorder → R)ExpManager (Global Experiment Manager, Singleton)
+Corresponds to the entire MLflow Tracking URI. Responsibilities: create/list/delete all Experiments, manage the current active_experiment, maintain tracking URI (including temporary switching).
+Experiment (Single Experiment Group)
+Corresponds to one MLflow Experiment. Responsibilities: manage all Recorders under this experiment, maintain active_recorder, perform search_runs (scoped to this experiment).
+Recorder (Single Run Record)
+Corresponds to one MLflow Run. Provides object-oriented interfaces: log_params/metrics, save_objects/load_object, log_artifact, list_artifacts, etc.
+R (QlibRecorder, Global Facade Singleton)
+The sole user interaction entry point. All shortcut operations (log_metrics, save_objects, get_exp, start, etc.) are performed via R, which internally routes automatically to the current active_experiment → active_recorder.
+
+2. Reason for Restricting to Only One active_experiment and active_recorderInherits and reinforces MLflow's core constraint: MLflow global functions (e.g., mlflow.log_metric) do not accept a run_id and can only operate on the current active run.
+Qlib shortcut interfaces like R.log_xxx() require no ID parameters and automatically apply to the current context.
+Allowing multiple actives would cause log confusion, semantic ambiguity, and force users to explicitly pass recorder objects.
+Conclusion: Technically feasible to support multiple runs (Qlib internally uses MlflowClient with explicit run_id), but deliberately restricted to one by design to ensure ultimate convenience and safety in 99% of scenarios.
+
+3. Concurrency Safety Design for Creating ExperimentsIn local file backend (file://), native MLflow create_experiment has no locking, leading to race conditions (multiple processes creating the same-named experiment simultaneously may conflict).
+Qlib adds FileLock in _get_or_create_exp() for local backends (lock file placed at mlruns/filelock) to ensure mutual exclusion.
+Remote backends (http/mysql, etc.) rely on MLflow server's transactions—no lock needed, only try-except double-check.
+
+4. Reason Why Creating Recorder (Run) Requires No LockMLflow uses UUID to generate independent directories: mlruns/<exp_id>/<run_id>/
+Directories are naturally isolated, UUID guarantees uniqueness, and concurrent creation by multiple processes does not interfere.
+Qlib fully trusts MLflow's native mechanism—all Recorder creation code has no locks.
+
+5. Elegant Application of @contextmanager
+Decorates start() as a context manager, enabling graceful experiment lifecycle management with with R.start(...).
+Entering with → start_exp() (activates experiment + recorder + mlflow.start_run)
+Inside with block → User business code; all R operations automatically associate with the current recorder
+Exiting with → Automatic end_exp() + mlflow.end_run()Normal exit → Mark as FINISHED
+Exceptional exit → Mark as FAILED
+
+Ensures resources are always released, status correctly marked, exception safety, and extremely concise code.
+
+6. Key Technical Detailsself.client: In MLflowExpManager, defined with @property
+ to dynamically create MlflowClient(tracking_uri=self.uri), supporting temporary URI switching (via R.uri_context).
+artifact_uri: Obtained from run.info.artifact_uri returned by mlflow.start_run(), format: file:///.../mlruns/<exp_id>/<run_id>/artifacts, determined by MLflow's underlying FileStore.
+get_local_dir(): Parses artifact_uri to obtain the local Run root directory (mlruns/<exp_id>/<run_id>/), primarily used for cleaning temporary files during load_object or manual artifact access for debugging.
+Asynchronous Logging: log_params/metrics/set_tags use AsyncCaller for async upload; waits for completion before end_run to avoid blocking the main training thread.
+Additional Value-Added Features: Automatically logs git diff/status, sys.argv, QLIB environment variables; save_objects/load_object directly handle Python objects (auto-pickling).
+
+7. Overall Design Motivation (Superior to Native MLflow)Object-oriented (Recorder object instead of run_id strings)
+Zero-parameter shortcut logging (R.log_xxx())
+Automatic lifecycle management (with + exception safety)
+Concurrency safety patches + rich convenience features
+Potential support for multiple backends
+
