@@ -48,6 +48,17 @@ Qlib Workflow Core Knowledge Summary (Advanced Mastery Level)
   Concurrency safety patches + rich convenience features
   Potential support for multiple backends
 
+# Deep Dive into Qlib Workflow: Core Knowledge Summary (Advanced Mastery Level)
+
+This summary distills my in-depth understanding of Qlib's Workflow module, based on source code analysis and discussions. It demonstrates advanced technical proficiency in quantitative frameworks, experiment management, and concurrency safety. Ideal for showcasing in resumes, interviews, or projects in AI quantization and cryptocurrency/blockchain strategies.
+
+## 1. Four-Layer Architecture and Responsibility Separation (ExpManager → Experiment → Recorder → R)
+- **ExpManager** (Global Experiment Manager, Singleton): Corresponds to the entire MLflow Tracking URI. Responsibilities: create/list/delete all Experiments, manage the current active_experiment, maintain tracking URI (including temporary switching).
+- **Experiment** (Individual Experiment Group): Corresponds to one MLflow Experiment. Responsibilities: manage all Recorders within this experiment, maintain active_recorder, perform search_runs scoped to this experiment.
+- **Recorder** (Single Run Record): Corresponds to one MLflow Run. Provides object-oriented interfaces: log_params/metrics, save_objects/load_object, log_artifact, list_artifacts, etc.
+- **R** (QlibRecorder, Global Facade Singleton): The sole user interaction entry point. All shortcut operations (log_metrics, save_objects, get_exp, start, etc.) are performed via R, which internally routes automatically to the current active_experiment → active_recorder.
+
+## User Code Flow
 
 Qlib Workflow Core Knowledge Summary (Advanced Mastery Level)1. Core Class Hierarchy (From Bottom to Top)Recorder (Records a single run)
 Base class: Recorder
