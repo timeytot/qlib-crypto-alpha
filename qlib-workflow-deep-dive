@@ -470,11 +470,13 @@ Architecture: Recorder/Experiment/ExpManager abstract base classes (raise NotImp
 Current only MLflow impl.
 Abstract layers → future new classes (e.g., WandBRecorder) switch backends, upper R unchanged.Though only MLflow now, workflow designed for multi-backend abstraction (weak but clear intent).
 
-Explanation of RecorderWrapper (With Full Context from qlib.init Code)python
-
+Qlib Global Recorder R: The RecorderWrapper Protection Mechanism
+  This section explains the design and purpose of Qlib's global recorder R, focusing on the RecorderWrapper — a critical safety feature that prevents dangerous reinitialization of Qlib during active experiments.Core Design: RecorderWrapper and Global Rpython
+  
   class RecorderWrapper(Wrapper):
       """
-      Wrapper class for QlibRecorder, which detects whether users reinitialize qlib when already starting an experiment.
+      Wrapper class for QlibRecorder, which detects whether users reinitialize qlib 
+      when already starting an experiment.
       """
   
       def register(self, provider):
@@ -482,66 +484,68 @@ Explanation of RecorderWrapper (With Full Context from qlib.init Code)python
               expm = getattr(self._provider, "exp_manager")
               if expm.active_experiment is not None:
                   raise RecorderInitializationError(
-                      "Please don't reinitialize Qlib if QlibRecorder is already activated. Otherwise, the experiment stored location will be modified."
+                      "Please don't reinitialize Qlib if QlibRecorder is already activated. "
+                      "Otherwise, the experiment stored location will be modified."
                   )
           self._provider = provider
   
-  Core PurposeRecorderWrapper is a safety mechanism that prevents catastrophic data corruption by blocking reinitialization of Qlib (qlib.init()) while an experiment is actively running (i.e., inside a with R.start() block).The Critical Problem It SolvesQlib's experiment storage location (MLflow tracking URI, default ./mlruns or custom path) is configured during qlib.init().From your init code:python
+  The global R is defined as:python
   
-  def init(default_conf="client", **kwargs):
-      ...
-      C.set(default_conf, **kwargs)  # ← Sets global config, including exp_manager.uri
-      ...
-      C.register()                   # ← Creates ExpManager using current URI
+  QlibRecorderWrapper = Annotated[QlibRecorder, RecorderWrapper]  # Type hint for static analysis
+  R: QlibRecorderWrapper = RecorderWrapper()                     # Actual runtime object
   
-  Once initialized, all R.start() experiments save logs/artifacts to that URI.Dangerous scenario (very common mistake):python
+  Annotated provides rich type information for tools like mypy/IDE (no runtime effect).
+  R is a wrapped singleton that behaves like a QlibRecorder but adds runtime protection.
   
-  with R.start(experiment_name="crypto_strategy"):
+  The Problem It SolvesQlib configuration (especially the MLflow tracking URI — where all experiment data is stored) is set during qlib.init().python
+  
+  qlib.init(mlflow_uri="/path/to/mlruns")  # Sets global storage location
+  
+  Once set, all experiments started with R.start() save logs, artifacts, and models to this URI.Dangerous mistake:python
+  
+  with R.start("crypto_strategy"):
       R.log_metrics(IC=0.08)
       
-      # User accidentally calls init again with different URI
-      qlib.init(mlflow_uri="/tmp/temp_experiments")  # ← Changes global URI mid-experiment!
+      # Accidental reinitialization with different URI
+      qlib.init(mlflow_uri="/tmp/other_mlruns")
+      
+      R.log_metrics(IC=0.12)  # ← Now saves to completely different folder!
   
-      R.log_metrics(IC=0.12)  # ← Now logs go to completely different folder!
+  Consequences:One logical experiment split across multiple unrelated mlruns directories
+  Artifacts/metrics fragmented → analysis becomes impossible
+  Silent corruption — extremely hard to debug
+  Destroys reproducibility
   
-  Result:One logical experiment split across two unrelated mlruns directories.
-  Artifacts/metrics fragmented → impossible to analyze properly.
-  Silent failure — hard to debug, destroys reproducibility.
+  How RecorderWrapper Prevents ThisDuring qlib.init(), the config system executes:python
   
-  How RecorderWrapper Prevents ThisThe global R is not a plain QlibRecorder — it's wrapped:python
-  
-  R = RecorderWrapper()  # Global R is this wrapper
-  
-  During qlib.init(), this happens (from C.register() in config code):python
-  
-  exp_manager = init_instance_by_config(self["exp_manager"])  # Create ExpManager with current URI
+  exp_manager = init_instance_by_config(self["exp_manager"])
   qr = QlibRecorder(exp_manager)
-  R.register(qr)  # ← Calls the wrapper's register method!
+  R.register(qr)  # ← Critical call to wrapper
   
-  Step-by-step execution of register(provider):if self._provider is not None:
-  → Checks if Qlib has already been initialized (a previous QlibRecorder instance exists).
-  If yes → expm = getattr(self._provider, "exp_manager")
-  → Accesses the current experiment manager.
-  if expm.active_experiment is not None:
-  → Checks if an experiment is currently active (i.e., inside with R.start()).
-  If both true → raises RecorderInitializationError immediately:"Please don't reinitialize Qlib if QlibRecorder is already activated. Otherwise, the experiment stored location will be modified."
+  Step-by-Step Safety Check in register(provider)if self._provider is not None
+  → Checks if Qlib has already been initialized (a recorder instance exists).
+  If yes → retrieve current exp_manager.
+  if expm.active_experiment is not None
+  → Checks if an experiment is currently running (with R.start() block active).
+  If both true → raise RecorderInitializationError immediately
+  Clear error message prevents URI change mid-experiment.
+  Only if safe → accept the new recorder.
   
-  Only if safe → self._provider = provider
-  → Allows reinitialization (e.g., before any experiment starts).
-  
-  Real-World Protection ExamplesAllowed:python
+  Real-World ScenariosAllowed (safe):python
   
   qlib.init(uri="path1")
-  qlib.init(uri="path2")  # No active experiment → safe (though not recommended)
+  qlib.init(uri="path2")  # No active experiment → permitted
   
   Blocked (protected):python
   
-  with R.start("test"):  # ← active_experiment exists
-      qlib.init(uri="dangerous_new_path")  # ← Wrapper detects → raises error immediately
+  with R.start("test"):           # active_experiment = True
+      qlib.init(uri="new_path")   # ← Wrapper detects → raises error instantly
   
-  Why This Is Excellent DesignFail-fast: Catches critical errors early with clear message.
-  Zero overhead: Only checked during init().
-  Preserves scientific integrity: Ensures one experiment = one consistent storage location.
-  User-friendly: Prevents silent, irreproducible disasters common in research code.
+  Why This Design Is ExcellentFail-fast principle: Catches critical bugs early with clear messaging
+  Zero runtime overhead: Only checked during init()
+  Preserves scientific integrity: Ensures one experiment = one consistent storage location
+  Defensive programming: Anticipates common user errors in research code
+  Clean integration: Combines type safety (Annotated) with runtime protection
   
+  This wrapper exemplifies Qlib's mature, production-grade engineering — protecting users from subtle but devastating bugs that could ruin months of quantitative research.Conclusion: The RecorderWrapper is not just a minor detail — it's a thoughtful safeguard that makes Qlib reliable for serious, reproducible quantitative and cryptocurrency strategy development.
   
