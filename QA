@@ -1,0 +1,18 @@
+problem:
+  C:\Users\...\mlflow\tracking\_tracking_service\utils.py:140: FutureWarning: Filesystem tracking backend (e.g., './mlruns') is deprecated...
+  MLflow warning (harmless for now): You're using the default local ./mlruns folder for experiment tracking. MLflow is moving toward recommending database backends (e.g., SQLite), 
+  but local file storage still works perfectly fine.
+
+answer:
+  qlib.init(
+      provider_uri=provider_uri,
+      region=REG_CN,
+      exp_manager={
+          "class": "MLflowExpManager",
+          "module_path": "qlib.workflow.expm",
+          "kwargs": {
+              "uri": "sqlite:///mlflow.db",
+              "default_exp_name": "Experiment"  
+          }
+      }
+  )
