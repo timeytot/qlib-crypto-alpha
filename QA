@@ -16,3 +16,10 @@ answer:
           }
       }
   )
+  or
+  with R.start(experiment_name="train_model", uri="sqlite:///mlflow.db"):  #uri is only used in qlib/qlib/workflow/__init__.py and qlib/qlib/workflow/expm.py
+  #with R.start(experiment_name="train_model"):
+      R.log_params(**flatten_dict(task))
+      model.fit(dataset)
+      R.save_objects(trained_model=model)
+      rid = R.get_recorder().id
