@@ -1,0 +1,86 @@
+
+Qlib Executor Infrastructure Data Structure Diagram (Nested Backtesting Scenario)Below is a complete data structure relationship diagram based on the execution process of BaseExecutor.reset_common_infra(), illustrating the object reference relationships for the top-level (daily frequency) and inner-level (minute frequency) Executors after initialization and reset.
+    
+    Global Shared Resources
+    └── common_infra_global (CommonInfrastructure object)
+        ├── trade_account → Account(init_cash=100000)   ← Shared by all levels (same instance)
+        └── trade_exchange → Exchange(...)              ← Shared by all levels (same instance)
+    
+    Top-Level Executor (NestedExecutor, daily frequency)
+    ├── self.common_infra ───────────────────────────► common_infra_global   (direct reference)
+    ├── self.level_infra (LevelInfrastructure)
+    │   ├── common_infra ───────────────────────────► common_infra_global
+    │   ├── executor ───────────────────────────────► Top-level NestedExecutor itself
+    │   ├── trade_calendar → Daily TradeCalendarManager (e.g., 2025-01-02 ~ 2025-01-10)
+    │   └── sub_level_infra ───────────────────────► Inner-level level_infra (below)
+    │
+    ├── self.inner_executor → Inner SimulatorExecutor (30-minute frequency)
+    │   ├── self.common_infra ──────────────────────► common_infra_global   (reference or updated to same object)
+    │   ├── self.level_infra (LevelInfrastructure)
+    │   │   ├── common_infra ───────────────────────► common_infra_global
+    │   │   ├── executor ───────────────────────────► Inner SimulatorExecutor itself
+    │   │   └── trade_calendar → 30-minute TradeCalendarManager
+    │   │       (reset to the current day's 30-minute interval on each outer step)
+    │   │
+    │   └── self.trade_account → Same Account object (shared via copy or direct reference)
+    │
+    └── self.inner_strategy
+        └── Accesses inner_executor's trade_calendar, common_infra, etc., via level_infra
+
+
+Start_time and end_time of TradeRangeByTime initialized:
+    Where start_time and end_time of TradeRangeByTime are initialized,And how, through the call chain, they ultimately map to start_idx, end_idx = get_start_end_idx(...).
+    
+    user create TradeRangeByTime("09:30", "14:30")
+        ↓ (initialization self.start_time / self.end_time)
+    TradeDecisionWO(trade_range=trade_range)
+        ↓ (The outer decision is passed to NestedExecutor)
+    NestedExecutor._collect_data
+        ↓
+    get_start_end_idx(sub_cal, outer_decision)
+        ↓
+    outer_decision.get_range_limit(inner_calendar=sub_cal)
+        ↓
+    outer_decision.trade_range(sub_cal)   ←  TradeRangeByTime.__call__
+        ↓
+    trade_calendar.get_range_idx("2025-01-02 09:30", "2025-01-02 14:30")
+        ↓
+    return (start_idx, end_idx)   #  (19, 29)
+    
+    from qlib.backtest.decision import TradeRangeByTime, TradeDecisionWO, Order
+    from qlib.constant import OrderDir
+    
+    
+    trade_range = TradeRangeByTime(
+        start_time="09:30",   
+        end_time="14:30"     
+    )
+    
+    #   self.start_time = time(9, 30, 0)
+    #   self.end_time   = time(14, 30, 0)
+    
+    
+    outer_decision = TradeDecisionWO(
+        order_list=[
+            Order(
+                stock_id="SH600000",
+                amount=10000,
+                direction=OrderDir.BUY,
+            )
+        ],
+        strategy=outer_strategy,      
+        trade_range=trade_range        
+    )
+    
+    from qlib.backtest.utils import get_start_end_idx
+    
+    while not self.inner_executor.finished():
+    
+        sub_cal = self.inner_executor.trade_calendar
+    
+        start_idx, end_idx = get_start_end_idx(sub_cal, trade_decision)
+    
+        if not self._align_range_limit or start_idx <= sub_cal.get_trade_step() <= end_idx:
+            ...
+    else:
+        sub_cal.step()
