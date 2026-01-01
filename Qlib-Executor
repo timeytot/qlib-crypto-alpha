@@ -77,6 +77,7 @@ https://github.com/microsoft/qlib/blob/main/qlib/backtest/executor.py#L433    if
         # Relaxed mode: ignore range limit completely
         execute inner strategy and trade on EVERY step
 
+
 Start_time and end_time of TradeRangeByTime initialized:
     Where start_time and end_time of TradeRangeByTime are initialized,And how, through the call chain, they ultimately map to start_idx, end_idx = get_start_end_idx(...).
     
