@@ -28,6 +28,47 @@ Qlib Executor Infrastructure Data Structure Diagram (Nested Backtesting Scenario
         └── Accesses inner_executor's trade_calendar, common_infra, etc., via level_infra
 
 
+start_idx, end_idx = get_start_end_idx(sub_cal, trade_decision)   https://github.com/microsoft/qlib/blob/main/qlib/backtest/executor.py#L432
+
+    Outer-level Decision (daily frequency)
+    └── Contains trade_range = TradeRangeByTime("09:30", "14:30")
+        └── self.start_time = time(9, 30, 0)      ← User-defined fixed daily start time (hours/minutes only)
+            self.end_time   = time(14, 30, 0)     ← User-defined fixed daily end time
+    
+    NestedExecutor starts inner loop
+    └── Calls get_start_end_idx(sub_cal, outer_decision)
+        └── sub_cal is the inner_calendar (inner-level TradeCalendarManager)
+    
+    get_start_end_idx calls
+    └── outer_decision.get_range_limit(inner_calendar=inner_calendar)
+    
+    _get_range_limit calls
+    └── self.trade_range(inner_calendar)   ← Executes TradeRangeByTime.__call__
+    
+    TradeRangeByTime.__call__ executes the key three lines:
+    1. start_date = trade_calendar.start_time.date()
+       → Extracts the current loop's date from inner_calendar (e.g., 2025-01-02)
+    
+    2. val_start = concat_date_time(start_date, self.start_time)
+       → Combines "today's date" + "user-defined daily start time" into a full timestamp
+       → 2025-01-02 09:30:00
+    
+       val_end   = concat_date_time(start_date, self.end_time)
+       → 2025-01-02 14:30:00
+    
+    3. return trade_calendar.get_range_idx(val_start, val_end)
+       → Looks up the step indices corresponding to 09:30 and 14:30 in the inner_calendar sequence
+       → Returns (start_idx, end_idx), e.g., (19, 29)
+
+    Why must inner_calendar be passed?Because:TradeRangeByTime only stores hours and minutes (09:30, 14:30) — it has no knowledge of which actual date it is.
+    Only inner_calendar.start_time knows whether the current loop is processing 2025-01-02 or 2025-01-03.
+    Different dates produce different full timestamps, resulting in different indices.
+    
+    One-sentence Summary (you nailed it!)Yes — it uses the date from inner_calendar (trade_calendar.start_time.date()) to determine "which day today is", then combines it with the user-preset self.start_time / self.end_time (fixed daily hours/minutes) from TradeRangeByTime to form complete datetimes, which are finally converted into step indices for the inner executor. This precisely controls which high-frequency bars are allowed to trade on any given day.This design is extremely elegant: the user only needs to set the window once ("every day from 09:30 to 14:30"), and the framework automatically adapts it to every specific date and inner-level frequency.
+
+
+
+
 Start_time and end_time of TradeRangeByTime initialized:
     Where start_time and end_time of TradeRangeByTime are initialized,And how, through the call chain, they ultimately map to start_idx, end_idx = get_start_end_idx(...).
     
