@@ -28,7 +28,7 @@ Qlib Executor Infrastructure Data Structure Diagram (Nested Backtesting Scenario
         └── Accesses inner_executor's trade_calendar, common_infra, etc., via level_infra
 
 
-start_idx, end_idx = get_start_end_idx(sub_cal, trade_decision)   https://github.com/microsoft/qlib/blob/main/qlib/backtest/executor.py#L432
+https://github.com/microsoft/qlib/blob/main/qlib/backtest/executor.py#L432    start_idx, end_idx = get_start_end_idx(sub_cal, trade_decision)   
 
     Outer-level Decision (daily frequency)
     └── Contains trade_range = TradeRangeByTime("09:30", "14:30")
@@ -66,8 +66,16 @@ start_idx, end_idx = get_start_end_idx(sub_cal, trade_decision)   https://github
     
     One-sentence Summary (you nailed it!)Yes — it uses the date from inner_calendar (trade_calendar.start_time.date()) to determine "which day today is", then combines it with the user-preset self.start_time / self.end_time (fixed daily hours/minutes) from TradeRangeByTime to form complete datetimes, which are finally converted into step indices for the inner executor. This precisely controls which high-frequency bars are allowed to trade on any given day.This design is extremely elegant: the user only needs to set the window once ("every day from 09:30 to 14:30"), and the framework automatically adapts it to every specific date and inner-level frequency.
 
-
-
+https://github.com/microsoft/qlib/blob/main/qlib/backtest/executor.py#L433    if not self._align_range_limit or start_idx <= sub_cal.get_trade_step() <= end_idx:
+    if self._align_range_limit:  
+        # Strict mode: MUST be inside the allowed range
+        if start_idx <= sub_cal.get_trade_step() <= end_idx:
+            execute inner strategy and trade
+        else:
+            only advance time (sub_cal.step()), no trading
+    else:
+        # Relaxed mode: ignore range limit completely
+        execute inner strategy and trade on EVERY step
 
 Start_time and end_time of TradeRangeByTime initialized:
     Where start_time and end_time of TradeRangeByTime are initialized,And how, through the call chain, they ultimately map to start_idx, end_idx = get_start_end_idx(...).
