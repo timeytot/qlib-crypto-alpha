@@ -30,4 +30,43 @@ https://github.com/microsoft/qlib/blob/main/qlib/utils/__init__.py#L865  self._p
   When you call D.features(...), it actually forwards the call to D._provider.features(...) via __getattr__.
   
   So yes:D itself is a Wrapper, but behaves exactly like a BaseProvider because all method calls are delegated to the real provider instance stored in D._provider.
-
+  
+  In a nutshell:
+  BaseProvider in the type hint is purely for static type checking and IDE support.
+  It tells tools like mypy, PyCharm, or VS Code:  "Even though the object is a Wrapper, you can safely assume it has all the methods and behavior of BaseProvider (e.g., .features(), .instruments(), .calendar())."
+  At runtime, this type annotation has zero effect — Python ignores Annotated completely during execution.
+  The actual object at runtime is always an instance of Wrapper.  python
+  
+  D = Wrapper()                  # ← Real object in memory
+  isinstance(D, Wrapper)         # → True
+  isinstance(D, BaseProvider)    # → False (it's not a subclass)
+  
+  The real functionality comes from D._provider.
+  After qlib.init():python
+  
+  D._provider = LocalProvider() (or ClientProvider, etc.)
+  
+  This _provider is a concrete subclass of BaseProvider, so it implements all the actual methods.When you call:python
+  
+  D.features(...)
+  
+  → Wrapper.__getattr__ forwards it to:python
+  
+  D._provider.features(...)
+  
+  SummaryAspect
+  What it is
+  Runtime impact?
+  Type hint
+  Annotated[BaseProvider, Wrapper]
+  None (only for static analysis)
+  Actual object
+  Wrapper() instance
+  Yes — this is what exists
+  Real implementation
+  D._provider (e.g., LocalProvider() instance)
+  Yes — this does the real work
+  
+  Conclusion in one sentence:
+  BaseProvider in the annotation is just a type hint for better developer experience (autocomplete, error checking) and has no runtime effect. The real object is a Wrapper, and the actual BaseProvider functionality lives in the delegated _provider instance.
+  
