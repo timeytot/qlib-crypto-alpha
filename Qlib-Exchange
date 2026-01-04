@@ -1,0 +1,57 @@
+https://github.com/microsoft/qlib/blob/main/qlib/backtest/exchange.py#L329  fields.add(vol_limit[1])
+  What do vol_limit and vol_limit[1] look like?In the _get_vol_limit method, vol_limit is simply one of these 2-element tuples.Example 1: Single limitpython
+  
+  volume_threshold = ("current", "$askV1")
+  
+  After processing:vol_limit = ("current", "$askV1")
+  vol_limit[0] = "current"
+  vol_limit[1] = "$askV1"
+  
+  Example 2: Dictionary form (recommended)python
+  
+  volume_threshold = {
+      "buy": ("current", "$askV1"),
+      "sell": ("current", "$bidV1"),
+      "all": ("cum", "0.05 * $volume")
+  }
+  
+  During iteration:First: key="buy" → vol_limit = ("current", "$askV1") → vol_limit[1] = "$askV1"
+  Second: key="sell" → vol_limit = ("current", "$bidV1") → vol_limit[1] = "$bidV1"
+  Third: key="all" → vol_limit = ("cum", "0.05 * $volume") → vol_limit[1] = "0.05 * $volume"
+  
+  Purpose of fields.add(vol_limit[1])python
+  
+  fields.add(vol_limit[1])
+  
+  This collects all field expressions used in the limits into a fields set.The final fields might look like:python
+  
+  {"$askV1", "$bidV1", "0.05 * $volume"}
+  
+  These are then added to self.all_fields and queried together in D.features(), ensuring the dataset includes the necessary high-frequency fields (e.g., Level-2 order book data).Summary tablevol_limit example
+  vol_limit[0]
+  vol_limit[1]
+  Type
+  Typical use case
+  ("current", "$askV1")
+  "current"
+  "$askV1"
+  Real-time
+  Limit buy volume
+  ("current", "$bidV1")
+  "current"
+  "$bidV1"
+  Real-time
+  Limit sell volume
+  ("cum", "0.1 * $volume")
+  "cum"
+  "0.1 * $volume"
+  Cumulative
+  Daily volume cap
+  ("cum", "DayCumsum($volume)")
+  "cum"
+  "DayCumsum($volume)"
+  Cumulative
+  Intraday cumulative cap
+  
+  Thus, vol_limit[1] is simply a Qlib field expression string that tells the system which field to query for calculating the volume cap.
+
