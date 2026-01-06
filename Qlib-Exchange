@@ -55,3 +55,55 @@ https://github.com/microsoft/qlib/blob/main/qlib/backtest/exchange.py#L329  fiel
   
   Thus, vol_limit[1] is simply a Qlib field expression string that tells the system which field to query for calculating the volume cap.
 
+https://github.com/microsoft/qlib/blob/main/qlib/backtest/exchange.py#L273  _update_limit
+  Data Examples for the Three Branches in _update_limit()Assume the original self.quote_df contains the following key columns (simplified):
+  instrument	datetime	$close	$change (return)	suspended (paused)
+  SH600000	2023-01-03	10.50	0.05 (+5%)	False
+  SH600000	2023-01-04	11.55	0.10 (+10%)	False
+  SH600000	2023-01-05	10.40	-0.10 (-10%)	False
+  SH600000	2023-01-06	NaN	NaN	True
+  SH600519	2023-01-04	1820.0	0.099 (+9.9%)	False
+  Branch 1: No Limit (limit_threshold=None → LT_NONE)Executed code:
+  python
+  self.quote_df["limit_buy"] = suspendedself.quote_df["limit_sell"] = suspended
+  Result:
+  datetime	limit_buy	limit_sell	Explanation
+  2023-01-03	False	False	Normal trading
+  2023-01-04	False	False	Can buy even on limit-up! (suitable for US stocks)
+  2023-01-05	False	False	Can sell even on limit-down! (suitable for US stocks)
+  2023-01-06	True	True	Paused → cannot trade
+  → Only suspension restricts trading; limit-up/down has no effect.
+  Branch 2: Custom Expression Limit (LT_TP_EXP)User setting:
+  python
+  limit_threshold = ("$change >= 0.095", "$change <= -0.095")  # Custom ±9.5% rule
+  Executed code:
+  python
+  self.quote_df["limit_buy"]  = self.quote_df["$change >= 0.095"].astype(bool) | suspendedself.quote_df["limit_sell"] = self.quote_df["$change <= -0.095"].astype(bool) | suspended
+  Result:
+  datetime	$change >= 0.095	$change <= -0.095	limit_buy	limit_sell	Explanation
+  2023-01-03	False	False	False	False	Normal
+  2023-01-04	True (+10%)	False	True	False	≥9.5% → cannot buy
+  2023-01-05	False	True (-10%)	False	True	≤-9.5% → cannot sell
+  2023-01-06	NaN	NaN	True	True	Paused takes priority
+  → Highly flexible — can implement special rules like ±5% for ST stocks or ±20% for STAR Market.
+  Branch 3: Fixed Percentage Limit (LT_FLT) — Most Common, Suitable for A-SharesUser setting:
+  python
+  limit_threshold = 0.1  # 10%
+  Executed code:
+  python
+  self.quote_df["limit_buy"]  = self.quote_df["$change"].ge(0.1) | suspendedself.quote_df["limit_sell"] = self.quote_df["$change"].le(-0.1) | suspended
+  Result:
+  datetime	$change.ge(0.1)	$change.le(-0.1)	limit_buy	limit_sell	Explanation
+  2023-01-03	False	False	False	False	Normal trading
+  2023-01-04	True (+10%)	False	True	False	Limit-up → cannot buy (real A-share rule)
+  2023-01-05	False	True (-10%)	False	True	Limit-down → cannot sell (real A-share rule)
+  2023-01-06	NaN	NaN	True	True	Paused → cannot trade
+  → Perfectly simulates the ±10% daily limit rule on China's main board (default and most commonly used).Final Comparison Table (Same Day Behavior Across Modes)
+  Date	$change	Paused	LT_NONE (US-style)	LT_TP_EXP (Custom ±9.5%)	LT_FLT (A-share ±10%)
+  2023-01-04	+10%	No	Can buy & sell	Cannot buy	Cannot buy
+  2023-01-05	-10%	No	Can buy & sell	Cannot sell	Cannot sell
+  2023-01-06	NaN	Yes	Cannot trade	Cannot trade	Cannot trade
+  Summary:
+  LT_NONE: Most permissive → ideal for US stocks or crypto
+  LT_TP_EXP: Most flexible → for complex or custom rules
+  LT_FLT: Standard and recommended → perfectly matches China's A-share main board limits
