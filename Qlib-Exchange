@@ -132,12 +132,12 @@ https://github.com/microsoft/qlib/blob/main/qlib/backtest/exchange.py#L783  adju
   
   **The crucial link**: When your strategy decides to trade, it outputs an intention (e.g., "buy 100 adjusted shares"). Before this order can be simulated, it must be translated from the **adjusted world** into the **real world**. This is the job of functions like `round_amount_by_trade_unit`.
   
-  How the Translation Works: A Corrected Step-by-Step Example
-  Let's trace what happens when your strategy wants to "buy 100 adjusted shares" after a 2-for-1 stock split.
+  How the Translation Works: A Step-by-Step Example (Illustrating Partial Fill)
+  Let's trace what happens when your strategy wants to "buy 75 adjusted shares" after a 2-for-1 stock split. This example highlights how the integer division (//) for lot size can lead to a partial fill of the original order.
   
   Pre-Split State:
   
-  Real World (Market): Price: $100/share.
+  Real World (Market): Price: $100/share. Minimum Lot Size: 100 shares.
   
   Adjusted World (Strategy View): Price: $100/share. Factor: 1.0.
   
@@ -145,34 +145,35 @@ https://github.com/microsoft/qlib/blob/main/qlib/backtest/exchange.py#L783  adju
   
   After a 2-for-1 Split:
   
-  Real World (Market): The price is halved to $50/share. What was 1 real share now becomes 2 real shares.
+  Real World (Market): Price: $50/share. What was 1 real share becomes 2 real shares. Lot size rule remains: trade in multiples of 100 shares.
   
-  Adjusted World (Strategy View): The price must remain continuous for analysis, so it stays at $100/share.
+  Adjusted World (Strategy View): Price remains at $100/share for continuity.
   
-  The Factor is updated to 2.0.
-  
-  Correct Meaning: 1 "adjusted share" now equals 2 real shares. The factor represents this new, larger quantity of real shares per adjusted unit.
+  Factor is updated to 2.0 (1 "adjusted share" = 2 real shares).
   
   Strategy Action:
-  Your model, analyzing the smooth adjusted price of $100, signals: "Buy 100 (adjusted) shares." This means: "Establish an economic exposure equivalent to 100 pre-split shares."
+  Your model signals: "Buy 75 (adjusted) shares." This means: "Establish an economic exposure equivalent to 75 pre-split shares."
   
   Execution Process (round_amount_by_trade_unit):
   
-  Convert to Real Shares: The system translates the strategy's intention into the real, tradable units of the post-split market.
+  Convert to Real Share Demand:
+  75 adjusted shares * 2.0 (factor) = 150 real shares
+  (The strategy's intent translates to needing 150 of today's shares.)
   
-  100 adjusted shares * 2.0 (factor) = **200 real shares**
+  Apply Trading Rules (The // Step - Enforcing Lot Size):
+  This is the critical step where integer division (//) enforces the "whole lots only" rule.
   
-  Apply Trading Rules: The real market has rules, such as a minimum "lot size" of 100 shares per order.
+  Tradable Lots = 150 real shares // 100 shares per lot
   
-  200 real shares // 100 shares per lot = **2 lots**
+  Tradable Lots = 1 (The integer quotient is 1. The remainder of 50 shares is discarded as it's an invalid partial lot).
   
-  Result: The order can be filled with 200 real shares.
+  Result: The system can only execute 1 full lot, which equals 1 * 100 = **100 real shares**.
   
-  Convert Back for Reporting: For internal consistency, the executed real quantity is converted back into adjusted units for the strategy's accounting.
+  👉 The // operator causes a partial fill. 50 real shares (33% of the original demand) are un-executable due to lot size constraints.
   
-  200 real shares / 2.0 (factor) = **100 adjusted shares**
-  
-  The strategy receives confirmation: its order for 100 adjusted shares was fully executed.
+  Convert Back for Strategy Consistency:
+  100 real shares / 2.0 (factor) = 50 adjusted shares
+  (The strategy is informed that only 50 of its requested 75 adjusted shares were filled.)
   
   ## Why This Design is Essential
   
