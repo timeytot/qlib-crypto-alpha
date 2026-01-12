@@ -1,4 +1,5 @@
 https://github.com/microsoft/qlib/blob/main/qlib/backtest/exchange.py#L329  fields.add(vol_limit[1])
+
   What do vol_limit and vol_limit[1] look like?In the _get_vol_limit method, vol_limit is simply one of these 2-element tuples.Example 1: Single limitpython
   
   volume_threshold = ("current", "$askV1")
@@ -56,6 +57,7 @@ https://github.com/microsoft/qlib/blob/main/qlib/backtest/exchange.py#L329  fiel
   Thus, vol_limit[1] is simply a Qlib field expression string that tells the system which field to query for calculating the volume cap.
 
 https://github.com/microsoft/qlib/blob/main/qlib/backtest/exchange.py#L273  _update_limit
+
   Data Examples for the Three Branches in _update_limit()Assume the original self.quote_df contains the following key columns (simplified):
   instrument	datetime	$close	$change (return)	suspended (paused)
   SH600000	2023-01-03	10.50	0.05 (+5%)	False
@@ -107,3 +109,60 @@ https://github.com/microsoft/qlib/blob/main/qlib/backtest/exchange.py#L273  _upd
   LT_NONE: Most permissive → ideal for US stocks or crypto
   LT_TP_EXP: Most flexible → for complex or custom rules
   LT_FLT: Standard and recommended → perfectly matches China's A-share main board limits
+
+https://github.com/microsoft/qlib/blob/main/qlib/backtest/exchange.py#L783  adjusted vs normal
+
+  # Qlib's Core Pattern: Internal Adjusted Data vs. Real-World Execution
+  
+  This note explains a fundamental design pattern in **Qlib** regarding how trading quantities are handled. The system maintains a clear separation between **adjusted data** used for internal strategy logic and **real-world quantities** used for order execution.
+  
+  ## The Core Idea: Two Layers of Reality
+  
+  Qlib operates on two distinct layers to bridge the gap between clean strategy design and messy real-world trading:
+  
+  1.  **Strategy Logic Layer (Adjusted World)**
+      *   **Purpose**: This is where your strategy lives, makes decisions, and generates signals.
+      *   **Data Type**: It uses **adjusted prices** and **adjusted quantities**.
+      *   **Key Property**: **Continuity**. This layer artificially removes all discontinuities caused by corporate actions like stock splits (e.g., a 2-for-1 split) or dividends. Prices and quantities are normalized over time, allowing a strategy's logic (like a moving average crossover) to respond only to genuine market movements, not accounting artifacts. The strategy always thinks in terms of this continuous, "clean" time series.
+  
+  2.  **Order Execution Layer (Real World)**
+      *   **Purpose**: This layer simulates or submits actual orders that must comply with real exchange rules.
+      *   **Data Type**: It uses **real market prices** and **real trading lot sizes** (e.g., 100-share "boards" in A-shares).
+      *   **Key Property**: **Precision & Compliance**. It must respect the precise prices on an exchange and the minimum tradable unit.
+  
+  **The crucial link**: When your strategy decides to trade, it outputs an intention (e.g., "buy 100 adjusted shares"). Before this order can be simulated, it must be translated from the **adjusted world** into the **real world**. This is the job of functions like `round_amount_by_trade_unit`.
+  
+  ## How the Translation Works: A Step-by-Step Example
+  
+  Let's trace what happens when your strategy wants to "buy 100 adjusted shares" after a 2-for-1 stock split.
+  
+  *   **Pre-Split State**:
+      *   Real Price: `$100/share`. Adjusted Price: `$100/share`. Factor: `1.0`.
+  
+  *   **After a 2-for-1 Split**:
+      *   **Real World**: The price is halved to `$50/share`. What was 1 share becomes 2 shares.
+      *   **Adjusted World (Strategy View)**: The price remains a continuous `$100/share`. The factor is updated to `0.5` (1.0 * 1/2).
+  
+  *   **Strategy Action**: Your model, looking at the smooth adjusted price of `$100`, signals: **"Buy 100 (adjusted) shares."**
+  
+  *   **Execution Process (`round_amount_by_trade_unit`)**:
+      1.  **Convert to Real Shares**: The system first converts the strategy's order into real, tradable shares using the factor.  
+          `100 adjusted shares * 0.5 (factor) = 50 real shares`.
+      2.  **Apply Trading Rules**: The real market has rules, like a minimum "lot size" of 100 shares per order. The system rounds the quantity to comply.  
+          `50 real shares // 100 trade_unit = 0 lots`.  
+          **Result: The order cannot be filled.**
+      3.  **Convert Back for Reporting**: For consistency, the executable real quantity is converted back to adjusted units for the strategy's internal accounting.  
+          `0 real shares / 0.5 (factor) = 0 adjusted shares`.
+  
+  ## Why This Design is Essential
+  
+  This two-layer architecture solves a critical problem in backtesting: **isolating strategy logic from market noise**.
+  
+  *   **For the Strategy Developer**: You can design and test logic in a **pure, continuous environment**. You don't have to constantly write code to handle splits or dividends; Qlib's adjusted layer does it for you.
+  *   **For Backtest Realism**: The system automatically applies **real-world trading friction** (like lot size restrictions) when simulating orders. This prevents a strategy from assuming it can buy odd lots of 50 shares if the market requires 100-share blocks.
+  
+  In essence, Qlib acts as a **perfect translator**. Your strategy speaks the language of "continuous adjusted data." Qlib listens, translates that intent into "compliant real-world orders," executes them, and then reports the results back in the language your strategy understands.
+  
+  ## Important Note on Cryptocurrencies
+  
+  This specific pattern with `factor` and `trade_unit` is most critical for **traditional equity markets** (like A-shares) where corporate actions and lot size rules are strict. For **cryptocurrency** trading, where assets don't split in the same way and fractional units are standard, this logic is often unnecessary and can be greatly simplified or removed.
