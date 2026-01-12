@@ -132,27 +132,47 @@ https://github.com/microsoft/qlib/blob/main/qlib/backtest/exchange.py#L783  adju
   
   **The crucial link**: When your strategy decides to trade, it outputs an intention (e.g., "buy 100 adjusted shares"). Before this order can be simulated, it must be translated from the **adjusted world** into the **real world**. This is the job of functions like `round_amount_by_trade_unit`.
   
-  ## How the Translation Works: A Step-by-Step Example
-  
+  How the Translation Works: A Corrected Step-by-Step Example
   Let's trace what happens when your strategy wants to "buy 100 adjusted shares" after a 2-for-1 stock split.
   
-  *   **Pre-Split State**:
-      *   Real Price: `$100/share`. Adjusted Price: `$100/share`. Factor: `1.0`.
+  Pre-Split State:
   
-  *   **After a 2-for-1 Split**:
-      *   **Real World**: The price is halved to `$50/share`. What was 1 share becomes 2 shares.
-      *   **Adjusted World (Strategy View)**: The price remains a continuous `$100/share`. The factor is updated to `0.5` (1.0 * 1/2).
+  Real World (Market): Price: $100/share.
   
-  *   **Strategy Action**: Your model, looking at the smooth adjusted price of `$100`, signals: **"Buy 100 (adjusted) shares."**
+  Adjusted World (Strategy View): Price: $100/share. Factor: 1.0.
   
-  *   **Execution Process (`round_amount_by_trade_unit`)**:
-      1.  **Convert to Real Shares**: The system first converts the strategy's order into real, tradable shares using the factor.  
-          `100 adjusted shares * 0.5 (factor) = 50 real shares`.
-      2.  **Apply Trading Rules**: The real market has rules, like a minimum "lot size" of 100 shares per order. The system rounds the quantity to comply.  
-          `50 real shares // 100 trade_unit = 0 lots`.  
-          **Result: The order cannot be filled.**
-      3.  **Convert Back for Reporting**: For consistency, the executable real quantity is converted back to adjusted units for the strategy's internal accounting.  
-          `0 real shares / 0.5 (factor) = 0 adjusted shares`.
+  Meaning: 1 "adjusted share" equals 1 real share.
+  
+  After a 2-for-1 Split:
+  
+  Real World (Market): The price is halved to $50/share. What was 1 real share now becomes 2 real shares.
+  
+  Adjusted World (Strategy View): The price must remain continuous for analysis, so it stays at $100/share.
+  
+  The Factor is updated to 2.0.
+  
+  Correct Meaning: 1 "adjusted share" now equals 2 real shares. The factor represents this new, larger quantity of real shares per adjusted unit.
+  
+  Strategy Action:
+  Your model, analyzing the smooth adjusted price of $100, signals: "Buy 100 (adjusted) shares." This means: "Establish an economic exposure equivalent to 100 pre-split shares."
+  
+  Execution Process (round_amount_by_trade_unit):
+  
+  Convert to Real Shares: The system translates the strategy's intention into the real, tradable units of the post-split market.
+  
+  100 adjusted shares * 2.0 (factor) = **200 real shares**
+  
+  Apply Trading Rules: The real market has rules, such as a minimum "lot size" of 100 shares per order.
+  
+  200 real shares // 100 shares per lot = **2 lots**
+  
+  Result: The order can be filled with 200 real shares.
+  
+  Convert Back for Reporting: For internal consistency, the executed real quantity is converted back into adjusted units for the strategy's accounting.
+  
+  200 real shares / 2.0 (factor) = **100 adjusted shares**
+  
+  The strategy receives confirmation: its order for 100 adjusted shares was fully executed.
   
   ## Why This Design is Essential
   
