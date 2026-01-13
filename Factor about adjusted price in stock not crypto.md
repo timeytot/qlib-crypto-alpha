@@ -1,9 +1,24 @@
-# 一级标题（文件标题）
-## 二级标题
-### 三级标题
-#### 四级标题
-**加粗**
-*斜体*
-`行内代码`
+# Factor and Adjusted Price
+
+## Basic Idea
+
+This document explains why:
+
+- price uses `× factor`
+- amount uses `÷ factor`
+
+---
+
+## Example
+
+| Time | Raw Price | Adjusted Price |
+|----|----|----|
+| Before | 10 | 20 |
+| After | 5 | 5 |
+
+---
+
+## Code Example
+
 ```python
 adjusted_price = raw_price * factor
