@@ -143,4 +143,112 @@ inner_order_indicators = [
     }),
 ]
     
-  
+https://github.com/microsoft/qlib/blob/main/qlib/backtest/executor.py#L149
+https://github.com/microsoft/qlib/blob/main/qlib/backtest/account.py#L143
+https://github.com/microsoft/qlib/blob/main/qlib/backtest/__init__.py#L212
+markdown
+
+## Explanation of `reset_common_infra` Method
+
+The `reset_common_infra` method is a key part of Qlib's nested executor architecture. It synchronizes shared infrastructure across layers and handles the `trade_account` using a **shallow copy** trick to achieve:
+
+- All layers **share the same real-time position** (cash and stock holdings are synchronized)
+- Each layer maintains **independent metrics** (portfolio metrics, trading indicators, historical positions)
+
+### Method Signature (simplified)
+
+```python
+def reset_common_infra(self, common_infra: CommonInfrastructure, copy_trade_account: bool = False) -> None:
+
+Line-by-Line Breakdownpython
+
+if not hasattr(self, "common_infra"):
+    self.common_infra = common_infra
+else:
+    self.common_infra.update(common_infra)
+
+Assign or update the shared infrastructure (common_infra)
+Ensures the current executor always has the latest shared components (account, exchange, etc.)
+
+python
+
+self.level_infra.reset_infra(common_infra=self.common_infra)
+
+Syncs the updated common_infra to the current layer's sub-infrastructure (level_infra)
+Important for nested executors to propagate shared objects downward
+
+python
+
+if common_infra.has("trade_account"):
+    self.trade_account: Account = (
+        copy.copy(common_infra.get("trade_account"))
+        if copy_trade_account
+        else common_infra.get("trade_account")
+    )
+    self.trade_account.reset(freq=self.time_per_step, port_metr_enabled=self.generate_portfolio_metrics)
+
+Core logic – shallow copy decision:If copy_trade_account=True (typical for inner/nested layers):Perform a shallow copy (copy.copy) of the parent account
+Shared: current_position (the actual holdings object) → all layers see the same cash/stock changes in real time
+Independent: portfolio_metrics, hist_positions, indicator → recreated as new objects
+
+If copy_trade_account=False (typical for the top-level executor):Directly reference the parent account (no copy)
+
+Finally, call reset(...) on the (possibly copied) account:Sets frequency (freq=self.time_per_step)
+Enables/disables portfolio metrics (port_metr_enabled)
+
+What Happens in Account.reset_report (called during reset)python
+
+self.portfolio_metrics = PortfolioMetrics(freq, benchmark_config)
+self.hist_positions = {}
+
+if ...:
+    self.current_position.fill_stock_value(...)
+
+self.indicator = Indicator()
+
+These lines recreate:A new portfolio_metrics object (portfolio-level metrics history)
+An empty hist_positions dict (daily position snapshots)
+A new indicator object (trading execution metrics: ffr, pa, pos, etc.)
+
+→ These are independent per layer after shallow copy.Shallow Copy vs No Copy – Data ExampleInitial state (top-level account):Cash: 1,000,000
+Holdings: none
+portfolio_metrics: day-level container A
+indicator: day-level trading metrics A
+
+Case A: Inner layer uses shallow copy (copy_trade_account=True) – Recommendedpython
+
+inner_account = copy.copy(outer_account)
+
+# inner_account.current_position is the SAME object as outer_account.current_position
+# But:
+inner_account.portfolio_metrics  # new independent container B
+inner_account.indicator          # new independent Indicator B
+
+Inner layer buys 1,000 shares SH600000 @ 10 yuan:inner_account.current_position updated → cash -= 10,000, holdings +1,000
+Outer layer sees the same change immediately (shared position)
+Inner layer records minute-level metrics in B
+Outer layer continues recording day-level metrics in A (independent)
+
+Case B: Inner layer does NOT copy (copy_trade_account=False) – Incorrectpython
+
+inner_account = outer_account  # direct reference
+
+# inner_account is the same object as outer_account
+
+Inner layer buys 1,000 shares:Position updated (correct, shared)
+But when inner layer calls reset_report:inner_account.portfolio_metrics = new minute-level container → overwrites outer's day-level container
+inner_account.indicator = new Indicator → overwrites outer's day-level indicator
+
+Result: Outer layer now sees minute-level data → metrics become corrupted and unusable
+
+Why Qlib Uses This DesignReal trading requires all layers to share the same capital and positions (no independent accounts per layer)
+But metrics must be layer-specific (outer sees daily portfolio curve, inner sees minute-level execution quality)
+Shallow copy perfectly solves this:Shared current_position → real-time synchronization of holdings
+Independent portfolio_metrics & indicator → each layer tracks its own view
+
+Summaryreset_common_infra synchronizes shared infrastructure and uses shallow copy on the account (when copy_trade_account=True) to ensure:All layers share the same real-time position (current_position is identical)
+Each layer has independent metrics (portfolio_metrics, indicator, hist_positions are recreated)
+
+This is the key mechanism that enables realistic nested backtesting in Qlib (e.g., daily strategy + minute-level execution sharing the same capital).
+
+You can copy the entire block above directly into your GitHub README or documentation. It’s clean, professional, and self-contained.
