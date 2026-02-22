@@ -220,12 +220,12 @@ Case A: Inner layer uses shallow copy (copy_trade_account=True) – Recommended
 ```python
 
 inner_account = copy.copy(outer_account)
-```
+
 # inner_account.current_position is the SAME object as outer_account.current_position
 # But:
 inner_account.portfolio_metrics  # new independent container B
 inner_account.indicator          # new independent Indicator B
-
+```
 Inner layer buys 1,000 shares SH600000 @ 10 yuan:inner_account.current_position updated → cash -= 10,000, holdings +1,000
 Outer layer sees the same change immediately (shared position)
 Inner layer records minute-level metrics in B
@@ -235,8 +235,8 @@ Case B: Inner layer does NOT copy (copy_trade_account=False) – Incorrect
 ```python
 
 inner_account = outer_account  # direct reference
-```
 # inner_account is the same object as outer_account
+```
 
 Inner layer buys 1,000 shares:Position updated (correct, shared)
 But when inner layer calls reset_report:inner_account.portfolio_metrics = new minute-level container → overwrites outer's day-level container
