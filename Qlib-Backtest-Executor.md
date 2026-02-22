@@ -169,11 +169,11 @@ else:
 
 Assign or update the shared infrastructure (common_infra)
 Ensures the current executor always has the latest shared components (account, exchange, etc.)
-
+```
 python
 
 self.level_infra.reset_infra(common_infra=self.common_infra)
-
+```
 Syncs the updated common_infra to the current layer's sub-infrastructure (level_infra)
 Important for nested executors to propagate shared objects downward
 
@@ -186,7 +186,7 @@ if common_infra.has("trade_account"):
         else common_infra.get("trade_account")
     )
     self.trade_account.reset(freq=self.time_per_step, port_metr_enabled=self.generate_portfolio_metrics)
-
+```
 Core logic – shallow copy decision:If copy_trade_account=True (typical for inner/nested layers):Perform a shallow copy (copy.copy) of the parent account
 Shared: current_position (the actual holdings object) → all layers see the same cash/stock changes in real time
 Independent: portfolio_metrics, hist_positions, indicator → recreated as new objects
@@ -196,7 +196,8 @@ If copy_trade_account=False (typical for the top-level executor):Directly refere
 Finally, call reset(...) on the (possibly copied) account:Sets frequency (freq=self.time_per_step)
 Enables/disables portfolio metrics (port_metr_enabled)
 
-What Happens in Account.reset_report (called during reset)python
+What Happens in Account.reset_report (called during reset)
+```python
 
 self.portfolio_metrics = PortfolioMetrics(freq, benchmark_config)
 self.hist_positions = {}
@@ -205,7 +206,7 @@ if ...:
     self.current_position.fill_stock_value(...)
 
 self.indicator = Indicator()
-
+```
 These lines recreate:A new portfolio_metrics object (portfolio-level metrics history)
 An empty hist_positions dict (daily position snapshots)
 A new indicator object (trading execution metrics: ffr, pa, pos, etc.)
@@ -215,10 +216,11 @@ Holdings: none
 portfolio_metrics: day-level container A
 indicator: day-level trading metrics A
 
-Case A: Inner layer uses shallow copy (copy_trade_account=True) – Recommendedpython
+Case A: Inner layer uses shallow copy (copy_trade_account=True) – Recommended
+```python
 
 inner_account = copy.copy(outer_account)
-
+```
 # inner_account.current_position is the SAME object as outer_account.current_position
 # But:
 inner_account.portfolio_metrics  # new independent container B
@@ -229,10 +231,11 @@ Outer layer sees the same change immediately (shared position)
 Inner layer records minute-level metrics in B
 Outer layer continues recording day-level metrics in A (independent)
 
-Case B: Inner layer does NOT copy (copy_trade_account=False) – Incorrectpython
+Case B: Inner layer does NOT copy (copy_trade_account=False) – Incorrect
+```python
 
 inner_account = outer_account  # direct reference
-
+```
 # inner_account is the same object as outer_account
 
 Inner layer buys 1,000 shares:Position updated (correct, shared)
