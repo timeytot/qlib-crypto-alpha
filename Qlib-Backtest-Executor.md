@@ -247,7 +247,8 @@ But metrics must be layer-specific (outer sees daily portfolio curve, inner sees
 Shallow copy perfectly solves this:Shared current_position → real-time synchronization of holdings
 Independent portfolio_metrics & indicator → each layer tracks its own view
 
-Summaryreset_common_infra synchronizes shared infrastructure and uses shallow copy on the account (when copy_trade_account=True) to ensure:All layers share the same real-time position (current_position is identical)
+#Summary
+reset_common_infra synchronizes shared infrastructure and uses shallow copy on the account (when copy_trade_account=True) to ensure:All layers share the same real-time position (current_position is identical)
 Each layer has independent metrics (portfolio_metrics, indicator, hist_positions are recreated)
 
 This is the key mechanism that enables realistic nested backtesting in Qlib (e.g., daily strategy + minute-level execution sharing the same capital).
