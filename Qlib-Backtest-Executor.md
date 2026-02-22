@@ -1,5 +1,5 @@
+# Structure of `decision_list`
 https://github.com/microsoft/qlib/blob/main/qlib/backtest/executor.py#L462
-## Structure of `decision_list`
 
 In a nested backtest scenario (outer level: daily, inner level: minute-level with 240 minutes per trading day in a standard A-share market), `decision_list` is a **list of tuples**, where each tuple records:
 
@@ -91,8 +91,8 @@ decision_list = [
 
 `decision_list` is a **time-stamped log of every inner-level trading decision**, perfectly aligned with `inner_order_indicators` to provide the temporal context needed for accurate benchmark price computation.
 
+# Structure of `inner_order_indicators`
 https://github.com/microsoft/qlib/blob/main/qlib/backtest/executor.py#L473
-## Structure of `inner_order_indicators`
 
 In a typical nested backtest scenario (outer level: daily, inner level: minute-level with 240 minutes per trading day), `inner_order_indicators` is ultimately **a list containing 240 `NumpyOrderIndicator` objects** — one for each minute of the trading day.
 
@@ -144,12 +144,10 @@ inner_order_indicators = [
 ]
 ```
 
+# Explanation of `reset_common_infra` Method
 https://github.com/microsoft/qlib/blob/main/qlib/backtest/executor.py#L149
 https://github.com/microsoft/qlib/blob/main/qlib/backtest/account.py#L143
 https://github.com/microsoft/qlib/blob/main/qlib/backtest/__init__.py#L212
-
-
-## Explanation of `reset_common_infra` Method
 
 The `reset_common_infra` method is a key part of Qlib's nested executor architecture. It synchronizes shared infrastructure across layers and handles the `trade_account` using a **shallow copy** trick to achieve:
 
@@ -248,7 +246,7 @@ But metrics must be layer-specific (outer sees daily portfolio curve, inner sees
 Shallow copy perfectly solves this:Shared current_position → real-time synchronization of holdings
 Independent portfolio_metrics & indicator → each layer tracks its own view
 
-# Summary
+## Summary
 reset_common_infra synchronizes shared infrastructure and uses shallow copy on the account (when copy_trade_account=True) to ensure:All layers share the same real-time position (current_position is identical)
 Each layer has independent metrics (portfolio_metrics, indicator, hist_positions are recreated)
 
