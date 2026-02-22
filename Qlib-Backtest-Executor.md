@@ -142,7 +142,7 @@ inner_order_indicators = [
         # ...
     }),
 ]
-    
+```
 https://github.com/microsoft/qlib/blob/main/qlib/backtest/executor.py#L149
 https://github.com/microsoft/qlib/blob/main/qlib/backtest/account.py#L143
 https://github.com/microsoft/qlib/blob/main/qlib/backtest/__init__.py#L212
