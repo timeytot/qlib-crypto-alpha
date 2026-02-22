@@ -159,9 +159,9 @@ The `reset_common_infra` method is a key part of Qlib's nested executor architec
 
 
 def reset_common_infra(self, common_infra: CommonInfrastructure, copy_trade_account: bool = False) -> None:
-```python
-Line-by-Line Breakdownpython
 
+Line-by-Line Breakdownpython
+```python
 if not hasattr(self, "common_infra"):
     self.common_infra = common_infra
 else:
