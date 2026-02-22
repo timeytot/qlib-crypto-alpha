@@ -157,28 +157,26 @@ The `reset_common_infra` method is a key part of Qlib's nested executor architec
 
 ### Method Signature (simplified)
 
-```python
-def reset_common_infra(self, common_infra: CommonInfrastructure, copy_trade_account: bool = False) -> None:
 
+def reset_common_infra(self, common_infra: CommonInfrastructure, copy_trade_account: bool = False) -> None:
+```python
 Line-by-Line Breakdownpython
 
 if not hasattr(self, "common_infra"):
     self.common_infra = common_infra
 else:
     self.common_infra.update(common_infra)
-
+```
 Assign or update the shared infrastructure (common_infra)
 Ensures the current executor always has the latest shared components (account, exchange, etc.)
-```
-python
+```python
 
 self.level_infra.reset_infra(common_infra=self.common_infra)
 ```
 Syncs the updated common_infra to the current layer's sub-infrastructure (level_infra)
 Important for nested executors to propagate shared objects downward
 
-python
-
+```python
 if common_infra.has("trade_account"):
     self.trade_account: Account = (
         copy.copy(common_infra.get("trade_account"))
