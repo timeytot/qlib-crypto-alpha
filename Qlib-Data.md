@@ -4,7 +4,7 @@
 - [`qlib/data/data.py#L1331`](https://github.com/microsoft/qlib/blob/main/qlib/data/data.py#L1331): `register_wrapper(D, C.provider, "qlib.data")`
 - [`qlib/config.py#L142`](https://github.com/microsoft/qlib/blob/main/qlib/config.py#L142): `"provider": "LocalProvider",`
 - [`qlib/utils/__init__.py#L865`](https://github.com/microsoft/qlib/blob/main/qlib/utils/__init__.py#L865): `self._provider = provider`
-- 
+
 This document explains the core design pattern behind Qlib's data access system, specifically how the `Wrapper` class and `register_wrapper` function work together to enable lazy initialization of data providers.
 
 ## Core Mechanism: Wrapper + `register_wrapper`
