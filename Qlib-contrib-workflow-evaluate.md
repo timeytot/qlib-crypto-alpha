@@ -2,7 +2,7 @@
 
 https://github.com/microsoft/qlib/blob/main/qlib/contrib/evaluate.py#L85
 
-Yes, these two formulas are **mathematically identical**!
+These two formulas are **mathematically identical**!
 
 ### Proof
 
