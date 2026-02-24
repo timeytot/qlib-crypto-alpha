@@ -1,4 +1,4 @@
-# Information ration
+# Information ratio
 
 https://github.com/microsoft/qlib/blob/main/qlib/contrib/evaluate.py#L85
 
