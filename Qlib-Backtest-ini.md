@@ -175,52 +175,68 @@ res[1].append((day_2, last_sub_tree))
 | **Recursion** | Sub-decisions are formatted recursively |
 | **Empty List** | Returns `None` (terminates recursion) |
 
-Why is there an extra res[1].append(...) at the end?
-Because the loop can only process decisions that have a next same-level decision as a boundary. The last same-level decision has no next decision to trigger its processing, so it needs to be handled separately after the loop.
+## Why is there an extra `res[1].append(...)` at the end?
 
-Analogy
-Imagine organizing a stack of documents grouped by chapters:
+Because **the loop can only process decisions that have a next same-level decision as a boundary. The last same-level decision has no next decision to trigger its processing, so it needs to be handled separately after the loop.**
 
-text
+### Analogy
+
+Imagine organizing a stack of documents grouped by **chapters**:
+
+```
 Documents: [Chapter1, Section1, Section2, Chapter2, Section3, Section4, Section5]
+```
+
 Your organizing logic:
+1. Iterate through documents. When encountering a new **chapter**, package the previous chapter and its contents
+2. But the **last chapter** has no next chapter to trigger the packaging, so you need to handle it separately after the loop
 
-Iterate through documents. When encountering a new chapter, package the previous chapter and its contents
+### Code Execution Visualization
 
-But the last chapter has no next chapter to trigger the packaging, so you need to handle it separately after the loop
-
-Code Execution Visualization
-python
+```python
 decisions = [day_1, min_1_1, min_1_2, day_2, min_2_1, min_2_2, min_2_3]
 # indices:     0      1        2       3      4        5        6
-Inside the Loop (when encountering the next same-level decision)
-text
+```
+
+#### Inside the Loop (when encountering the next same-level decision)
+
+```
 When i=3, we find day_2 → process day_1 and its sub-decisions [min_1_1, min_1_2]
     res[1].append((day_1, format_decisions([min_1_1, min_1_2])))
     last_dec_idx = 3
-After the Loop
+```
+
+#### After the Loop
+
 At this point:
+- `last_dec_idx = 3` (pointing to the last day-level decision)
+- Remaining unprocessed decisions: `decisions[4:] = [min_2_1, min_2_2, min_2_3]`
+- There is no next day-level decision to trigger processing
 
-last_dec_idx = 3 (pointing to the last day-level decision)
+#### Therefore, we need to handle the last one separately
 
-Remaining unprocessed decisions: decisions[4:] = [min_2_1, min_2_2, min_2_3]
-
-There is no next day-level decision to trigger processing
-
-Therefore, we need to handle the last one separately
-python
+```python
 # Manually process the last day_2 and all its sub-decisions
 res[1].append((day_2, format_decisions([min_2_1, min_2_2, min_2_3])))
-What Would Happen Without This Line?
-python
+```
+
+### What Would Happen Without This Line?
+
+```python
 # After the loop, res would only contain:
 res = ("day", [(day_1, ("1min", [(min_1_1, None), (min_1_2, None)]))])
 
 # day_2 and all its sub-decisions would be completely lost!
-The Complete Process
-Step	What Happens	Result
-Loop	When finding day_2, process day_1 and its children	(day_1, sub_tree) added to result
-After Loop	No more day-level decisions to trigger processing	Need to manually process day_2
-Final Line	Process day_2 and all remaining decisions	(day_2, sub_tree) added to result
-Common Design Pattern
-This pattern is known as "loop processing + trailing edge handling" or "process boundaries + final element". It's commonly used when you need to split data based on boundaries:
+```
+
+### The Complete Process
+
+| Step | What Happens | Result |
+|------|--------------|--------|
+| **Loop** | When finding `day_2`, process `day_1` and its children | `(day_1, sub_tree)` added to result |
+| **After Loop** | No more day-level decisions to trigger processing | Need to manually process `day_2` |
+| **Final Line** | Process `day_2` and all remaining decisions | `(day_2, sub_tree)` added to result |
+
+### Common Design Pattern
+
+This pattern is known as **"loop processing + trailing edge handling"** or **"process boundaries + final element"**. It's commonly used when you need to split data based on boundaries:
