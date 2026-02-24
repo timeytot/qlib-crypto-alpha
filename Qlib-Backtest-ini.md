@@ -1,5 +1,5 @@
 # `format_decisions` Function Explanation
-
+https://github.com/microsoft/qlib/blob/main/qlib/backtest/__init__.py#L312
 This function converts a flat list of trading decisions into a tree structure that reflects the nested execution hierarchy.
 
 ### Function Signature
