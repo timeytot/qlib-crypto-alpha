@@ -1,4 +1,4 @@
-## `format_decisions` Function Explanation
+# `format_decisions` Function Explanation
 
 This function converts a flat list of trading decisions into a tree structure that reflects the nested execution hierarchy.
 
