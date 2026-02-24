@@ -20,7 +20,7 @@ information_ratio = μ/σ × √N
 
 ### Why Write It as `mean / std * np.sqrt(N)` in Code?
 
-This is a **more concise写法** that directly multiplies daily data by the annualization factor, avoiding the intermediate steps of calculating annualized return and annualized standard deviation.
+This is a **more concise** that directly multiplies daily data by the annualization factor, avoiding the intermediate steps of calculating annualized return and annualized standard deviation.
 
 ### Equivalence Verification
 
