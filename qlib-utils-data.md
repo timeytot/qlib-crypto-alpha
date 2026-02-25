@@ -1,8 +1,6 @@
-markdown
-
-https://github.com/microsoft/qlib/blob/main/qlib/utils/data.py#L38
-
 ## `deepcopy_basic_type` Function – Full Data Shape Before & After
+
+[Source Code Link](https://github.com/microsoft/qlib/blob/main/qlib/utils/data.py#L38)
 
 The `deepcopy_basic_type` function creates **new container structures** (dict, list, tuple) while **sharing references** to their contents (primitives and complex objects). This enables fast, safe config duplication in Qlib without copying expensive objects like models or datasets.
 
@@ -29,9 +27,11 @@ config = {
     ],
     "extra": (1.0, 2.0)                         # tuple (immutable)
 }
+```
 
 Memory layout (simplified):
 
+```
 config @ 0xA (dict)
 ├── "topk" → 50 @ 0xB (int)
 ├── "n_drop" → 5 @ 0xC (int)
@@ -45,9 +45,11 @@ config @ 0xA (dict)
 └── "extra" → tuple @ 0x14
     ├── 0 → 1.0 @ 0x15 (float)
     └── 1 → 2.0 @ 0x16 (float)
+```
 
-After new_config = deepcopy_basic_type(config)python
+### After `new_config = deepcopy_basic_type(config)`
 
+```python
 new_config = {
     "topk": 50,                                 # same int value (shared)
     "n_drop": 5,
@@ -62,9 +64,11 @@ new_config = {
     ],
     "extra": (1.0, 2.0)                         # NEW tuple object
 }
+```
 
 Memory layout after copy (simplified):
 
+```
 new_config @ 0x100 (NEW dict)
 ├── "topk" → 50 @ 0xB (same as original)
 ├── "n_drop" → 5 @ 0xC (same)
@@ -78,65 +82,44 @@ new_config @ 0x100 (NEW dict)
 └── "extra" → NEW tuple @ 0x103
     ├── 0 → 1.0 @ 0x15 (shared)
     └── 1 → 2.0 @ 0x16 (shared)
+```
 
-Summary Table: Copied vs SharedElement Type
-Copied? (New Object)
-Shared? (Original Reference)
-Memory Address Change?
-Modification Impact on Original
-Top-level dict
-Yes
-No
-Yes
-Structure changes independent
-Nested dict ("params")
-Yes
-No
-Yes
-Structure changes independent
-Nested list ("labels")
-Yes
-No
-Yes
-Structure changes independent
-Nested tuple ("extra")
-Yes
-No
-Yes
-Structure changes independent
-Primitives (int, float, str)
-No (immutable)
-Yes
-No
-Reassignment → no impact
-Complex object (model)
-No
-Yes
-No
-In-place changes → affects all
+### Summary Table: Copied vs Shared
 
-Modification ExamplesModify primitive (int/float/str) → safe, no impactpython
+| Element Type | Copied? (New Object) | Shared? (Original Reference) | Memory Address Change? | Modification Impact on Original |
+|--------------|---------------------|------------------------------|------------------------|----------------------------------|
+| **Top-level dict** | Yes | No | Yes | Structure changes independent |
+| **Nested dict ("params")** | Yes | No | Yes | Structure changes independent |
+| **Nested list ("labels")** | Yes | No | Yes | Structure changes independent |
+| **Nested tuple ("extra")** | Yes | No | Yes | Structure changes independent |
+| **Primitives (int, float, str)** | No (immutable) | Yes | No | Reassignment → no impact |
+| **Complex object (model)** | No | Yes | No | In-place changes → affects all |
 
+### Modification Examples
+
+**Modify primitive (int/float/str) → safe, no impact**
+```python
 new_config["topk"] = 30
 # config["topk"] still 50
+```
 
-Modify nested container → only affects new copypython
-
+**Modify nested container → only affects new copy**
+```python
 new_config["params"]["horizon"] = 10
 # config["params"]["horizon"] still 5
+```
 
-Modify shared mutable object → affects bothpython
-
+**Modify shared mutable object → affects both**
+```python
 new_config["signal"].learning_rate = 0.001
 # config["signal"].learning_rate also becomes 0.001 (same object!)
+```
 
-To avoid affecting original: reassignpython
-
+**To avoid affecting original: reassign**
+```python
 new_config["signal"] = copy.deepcopy(some_expensive_model)  # explicit deep copy if needed
+```
 
-One-Sentence Summarydeepcopy_basic_type creates new containers (dict/list/tuple) for safe structural changes while sharing references to contents (primitives immutable → safe, mutable objects like models → changes propagate), enabling fast config duplication without duplicating expensive objects.
+### One-Sentence Summary
 
-You can copy the entire block above directly into your GitHub `.md` file. It includes the GitHub link at the top, complete data shapes before & after, memory layouts, modification examples, and summary table.
-
-Let me know if you want any adjustments (e.g., shorter version, more examples, different model attributes, etc.)!
-
+`deepcopy_basic_type` creates new containers (dict/list/tuple) for safe structural changes while sharing references to contents (primitives immutable → safe, mutable objects like models → changes propagate), enabling fast config duplication without duplicating expensive objects.
