@@ -1,6 +1,6 @@
 ## BFS Traversal of Configuration Tree – Step-by-Step Execution
 
-[Source Code Link](https://github.com/microsoft/qlib/blob/main/qlib/utils/data.py#L38)
+https://github.com/microsoft/qlib/blob/main/qlib/utils/data.py#L38
 
 ### Initial State
 
