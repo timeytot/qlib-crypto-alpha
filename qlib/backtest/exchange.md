@@ -1,6 +1,6 @@
 ## Understanding Qlib's Exchange Module: Volume Limits and Order Execution
 
-[View Source: exchange.py](https://github.com/microsoft/qlib/blob/main/qlib/backtest/exchange.py)
+https://github.com/microsoft/qlib/blob/main/qlib/backtest/exchange.py
 
 This document explains three interconnected aspects of Qlib's backtest exchange mechanism: volume limits, trading suspension handling, and the adjusted vs. real data architecture.
 
