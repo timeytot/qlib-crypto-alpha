@@ -4,12 +4,16 @@ https://github.com/microsoft/qlib/blob/main/qlib/utils/data.py#L38
 
 ## `deepcopy_basic_type` Function – Full Data Shape Before & After
 
-The `deepcopy_basic_type` function creates a **new container structure** (dict, list, tuple) while **sharing references** to the original contents (primitives and complex objects). This allows fast, safe config duplication in Qlib without copying expensive objects like models or datasets.
+The `deepcopy_basic_type` function creates **new container structures** (dict, list, tuple) while **sharing references** to their contents (primitives and complex objects). This enables fast, safe config duplication in Qlib without copying expensive objects like models or datasets.
 
 ### Original Config (before copy)
 
 ```python
-some_expensive_model = ExpensiveModel(learning_rate=0.01)  # complex mutable object
+class ExpensiveModel:
+    def __init__(self, learning_rate=0.01):
+        self.learning_rate = learning_rate
+
+some_expensive_model = ExpensiveModel(learning_rate=0.01)
 
 config = {
     "topk": 50,                                 # int (immutable primitive)
@@ -30,16 +34,17 @@ Memory layout (simplified):
 
 config @ 0xA (dict)
 ├── "topk" → 50 @ 0xB (int)
-├── "signal" → model @ 0xC (shared)
-├── "params" → dict @ 0xD
-│   ├── "horizon" → 5 @ 0xE
-│   └── "alpha" → 0.9 @ 0xF
-├── "labels" → list @ 0x10
-│   ├── 0 → str @ 0x11
-│   └── 1 → str @ 0x12
-└── "extra" → tuple @ 0x13
-    ├── 0 → 1.0
-    └── 1 → 2.0
+├── "n_drop" → 5 @ 0xC (int)
+├── "signal" → model @ 0xD (shared object)
+├── "params" → dict @ 0xE
+│   ├── "horizon" → 5 @ 0xF (int)
+│   └── "alpha" → 0.9 @ 0x10 (float)
+├── "labels" → list @ 0x11
+│   ├── 0 → str @ 0x12
+│   └── 1 → str @ 0x13
+└── "extra" → tuple @ 0x14
+    ├── 0 → 1.0 @ 0x15 (float)
+    └── 1 → 2.0 @ 0x16 (float)
 
 After new_config = deepcopy_basic_type(config)python
 
@@ -62,16 +67,17 @@ Memory layout after copy (simplified):
 
 new_config @ 0x100 (NEW dict)
 ├── "topk" → 50 @ 0xB (same as original)
-├── "signal" → model @ 0xC (same object!)
+├── "n_drop" → 5 @ 0xC (same)
+├── "signal" → model @ 0xD (same object!)
 ├── "params" → NEW dict @ 0x101
-│   ├── "horizon" → 5 @ 0xE (shared)
-│   └── "alpha" → 0.9 @ 0xF (shared)
+│   ├── "horizon" → 5 @ 0xF (shared)
+│   └── "alpha" → 0.9 @ 0x10 (shared)
 ├── "labels" → NEW list @ 0x102
-│   ├── 0 → str @ 0x11 (shared)
-│   └── 1 → str @ 0x12 (shared)
+│   ├── 0 → str @ 0x12 (shared)
+│   └── 1 → str @ 0x13 (shared)
 └── "extra" → NEW tuple @ 0x103
-    ├── 0 → 1.0 (shared)
-    └── 1 → 2.0 (shared)
+    ├── 0 → 1.0 @ 0x15 (shared)
+    └── 1 → 2.0 @ 0x16 (shared)
 
 Summary Table: Copied vs SharedElement Type
 Copied? (New Object)
@@ -109,7 +115,7 @@ Yes
 No
 In-place changes → affects all
 
-What Happens When You Modify?Modify primitive (int/float/str) → safe, no impact on originalpython
+Modification ExamplesModify primitive (int/float/str) → safe, no impactpython
 
 new_config["topk"] = 30
 # config["topk"] still 50
@@ -124,13 +130,13 @@ Modify shared mutable object → affects bothpython
 new_config["signal"].learning_rate = 0.001
 # config["signal"].learning_rate also becomes 0.001 (same object!)
 
-To avoid: reassign the keypython
+To avoid affecting original: reassignpython
 
 new_config["signal"] = copy.deepcopy(some_expensive_model)  # explicit deep copy if needed
 
 One-Sentence Summarydeepcopy_basic_type creates new containers (dict/list/tuple) for safe structural changes while sharing references to contents (primitives immutable → safe, mutable objects like models → changes propagate), enabling fast config duplication without duplicating expensive objects.
 
-You can copy the entire block above directly into your GitHub `.md` file. It includes the GitHub link at the top, full data shape before & after, memory layout, modification examples, and summary table.
+You can copy the entire block above directly into your GitHub `.md` file. It includes the GitHub link at the top, complete data shapes before & after, memory layouts, modification examples, and summary table.
 
-Let me know if you want adjustments (e.g., shorter, more examples, different model class, etc.)!
+Let me know if you want any adjustments (e.g., shorter version, more examples, different model attributes, etc.)!
 
