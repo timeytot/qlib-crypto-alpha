@@ -1,6 +1,6 @@
 ## `deepcopy_basic_type` Function – Full Data Shape Before & After
 
-[Source Code Link](https://github.com/microsoft/qlib/blob/main/qlib/utils/data.py#L38)
+[Source Code Link](https://github.com/microsoft/qlib/blob/main/qlib/utils/data.py#L38)https://github.com/microsoft/qlib/blob/main/qlib/utils/data.py#L38
 
 The `deepcopy_basic_type` function creates **new container structures** (dict, list, tuple) while **sharing references** to their contents (primitives and complex objects). This enables fast, safe config duplication in Qlib without copying expensive objects like models or datasets.
 
