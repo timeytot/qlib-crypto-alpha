@@ -333,3 +333,116 @@ FLATTEN_TUPLE = "__flatten_tuple__"
 ```
 
 This is useful when you need to preserve the hierarchical structure of keys but don't want to use string concatenation.
+
+# Difference Between `bisect_left` and `bisect_right`
+
+https://github.com/microsoft/qlib/blob/main/qlib/utils/__init__.py#L436
+
+Both functions are used to find the insertion position in a **sorted list**, but they behave differently when handling **duplicate values**.
+
+### Core Difference
+
+| Function | Insertion Position | With Duplicates |
+|----------|-------------------|-----------------|
+| **`bisect_left`** | Returns the first position where the element is **≥ target** | Inserts to the **left** of duplicates |
+| **`bisect_right`** | Returns the first position where the element is **> target** | Inserts to the **right** of duplicates |
+
+### Basic Example
+
+```python
+import bisect
+
+arr = [1, 3, 5, 5, 7, 9]  # Sorted list with two 5s
+
+# Find target 5
+pos_left = bisect.bisect_left(arr, 5)   # Returns 2 (position of first 5)
+pos_right = bisect.bisect_right(arr, 5)  # Returns 4 (position after last 5)
+```
+
+## Why Use `bisect_right - 1` for Left Alignment and `bisect_left` for Right Alignment?
+
+This is designed to **find the nearest valid trading day** when the input date is not a trading day.
+
+### Core Logic
+
+| Alignment | Target Trading Day | Function Used | Reason |
+|-----------|-------------------|---------------|--------|
+| **left** | Maximum value ≤ trading_date | `bisect_right - 1` | Find the nearest day on the left (including the input day itself) |
+| **right** | Minimum value ≥ trading_date | `bisect_left` | Find the nearest day on the right (including the input day itself) |
+
+### Visual Understanding with Calendar
+
+```python
+cal = ['02-13', '02-14', '02-17', '02-18', '02-19']  # Trading days
+#       0        1        2        3        4
+```
+
+#### Case 1: Input is a Trading Day
+
+```python
+trading_date = '02-14'  # Itself is a trading day
+
+# Left alignment
+pos = bisect.bisect_right(cal, '02-14')  # Returns 2
+_index = 2 - 1 = 1  # Still '02-14' ✓
+
+# Right alignment
+pos = bisect.bisect_left(cal, '02-14')   # Returns 1
+_index = 1  # Still '02-14' ✓
+```
+
+#### Case 2: Input is a Non-Trading Day (in the middle)
+
+```python
+trading_date = '02-15'  # Sunday, non-trading day
+
+# Left alignment (find the nearest day on the left)
+# Use bisect_right to find the first position > 02-15
+pos = bisect.bisect_right(cal, '02-15')  # Returns 2 (pointing to '02-17')
+_index = 2 - 1 = 1  # Gets '02-14' ✓ (nearest left)
+
+# Right alignment (find the nearest day on the right)
+# Use bisect_left to find the first position ≥ 02-15
+pos = bisect.bisect_left(cal, '02-15')   # Returns 2 (pointing to '02-17')
+_index = 2  # Gets '02-17' ✓ (nearest right)
+```
+
+#### Case 3: Input is Before the First Trading Day
+
+```python
+trading_date = '02-12'  # Earlier than the first trading day
+
+# Left alignment
+pos = bisect.bisect_right(cal, '02-12')  # Returns 0
+_index = 0 - 1 = -1  # Out of bounds (needs handling)
+
+# Right alignment
+pos = bisect.bisect_left(cal, '02-12')   # Returns 0
+_index = 0  # Gets '02-13' ✓ (first trading day)
+```
+
+#### Case 4: Input is After the Last Trading Day
+
+```python
+trading_date = '02-20'  # Later than the last trading day
+
+# Left alignment
+pos = bisect.bisect_right(cal, '02-20')  # Returns 5
+_index = 5 - 1 = 4  # Gets '02-19' ✓ (last trading day)
+
+# Right alignment
+pos = bisect.bisect_left(cal, '02-20')   # Returns 5
+_index = 5  # Out of bounds (needs handling)
+```
+
+### Why This Design?
+
+| Alignment | Target | Using `bisect_right` | Using `bisect_left` |
+|----------|--------|---------------------|---------------------|
+| **left** | Maximum value ≤ x | `bisect_right(x)-1` gives exactly this | `bisect_left(x)` gives the first value ≥ x, which doesn't match |
+| **right** | Minimum value ≥ x | `bisect_right(x)` gives the first value > x, which doesn't match | `bisect_left(x)` gives exactly this |
+
+### Summary
+
+- **Left alignment**: To move left, use `bisect_right` to find the right boundary, then step back one position
+- **Right alignment**: To move right, use `bisect_left` to directly find the starting point on the right
