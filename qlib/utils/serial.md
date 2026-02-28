@@ -1,4 +1,4 @@
-## `Serializable._is_kept` and `__getstate__` Logic
+# `Serializable._is_kept` and `__getstate__` Logic
 
 **Source file**: [qlib/utils/serial.py#L38](https://github.com/microsoft/qlib/blob/main/qlib/utils/serial.py#L38)
 
@@ -190,7 +190,7 @@ Therefore:
 | `if key in self._get_attr_list("exclude")` | Checks the **value of `_exclude`** | Excludes attributes explicitly marked for exclusion |
 | `self.dump_all or not key.startswith("_")` | Fallback rule | Saves non-private attributes by default |
 
-## `config` Method Explanation
+# `config` Method Explanation
 
 **Source file**: [qlib/utils/serial.py#L81](https://github.com/microsoft/qlib/blob/main/qlib/utils/serial.py#L81)
 
