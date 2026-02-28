@@ -131,11 +131,6 @@ state = {'data': [1, 2, 3], '_include': ['data']}
 loaded = MySerializable()
 loaded.__setstate__(state)
 # loaded._include = ['data']  ← The rule becomes fixed!
-
-# If you try to change the rule later
-loaded.config(include=['new_data'])
-# Now loaded._include becomes ambiguous: ['data', 'new_data']? Or replaced?
-# This leads to unpredictable behavior.
 ```
 
 ### Detailed Logic Breakdown
