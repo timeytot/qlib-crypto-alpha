@@ -92,7 +92,7 @@ recorder/
     └── port_analysis_day.pkl
 ```
 
-## `check` Method Explanation
+# `check` Method Explanation
 
 **Source files**:
 - [qlib/workflow/record_temp.py#L121](https://github.com/microsoft/qlib/blob/2fb9380b342556ddb50a4b24e4fe8655d548b2b8/qlib/workflow/record_temp.py#L121)
