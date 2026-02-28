@@ -189,3 +189,140 @@ Therefore:
 | `if key in self._get_attr_list("include")` | Checks the **value of `_include`** | Includes attributes explicitly marked for saving |
 | `if key in self._get_attr_list("exclude")` | Checks the **value of `_exclude`** | Excludes attributes explicitly marked for exclusion |
 | `self.dump_all or not key.startswith("_")` | Fallback rule | Saves non-private attributes by default |
+
+## `config` Method Explanation
+
+**Source file**: [qlib/utils/serial.py#L81](https://github.com/microsoft/qlib/blob/main/qlib/utils/serial.py#L81)
+
+This method is used to **configure the behavior of a serializable object**, determining which attributes are saved or excluded during serialization, with optional recursive application to child objects.
+
+### Method Signature
+
+```python
+def config(self, recursive=False, **kwargs):
+    """
+    Configure the serializable object.
+
+    Parameters
+    ----------
+    kwargs : 
+        dump_all : bool      # Whether to save all attributes (including private ones)
+        exclude : list       # List of attributes explicitly NOT to be dumped
+        include : list       # List of attributes explicitly TO be dumped
+    recursive : bool         # Whether to apply configuration recursively to child objects
+    """
+```
+
+### Line-by-Line Code Explanation
+
+#### 1. Processing Configuration Parameters
+
+```python
+keys = {"dump_all", "exclude", "include"}
+for k, v in kwargs.items():
+    if k in keys:
+        attr_name = f"_{k}"        # Convert to private attribute name
+        setattr(self, attr_name, v) # Set attribute, e.g., self._dump_all = v
+    else:
+        raise KeyError(f"Unknown parameter: {k}")
+```
+
+**Example**:
+```python
+# Method call
+obj.config(dump_all=True, include=["data"], exclude=["_cache"])
+
+# Internal execution
+# k="dump_all", v=True → attr_name="_dump_all", setattr(self, "_dump_all", True)
+# k="include", v=["data"] → attr_name="_include", setattr(self, "_include", ["data"])
+# k="exclude", v=["_cache"] → attr_name="_exclude", setattr(self, "_exclude", ["_cache"])
+```
+
+#### 2. Recursive Processing of Child Objects
+
+```python
+if recursive:
+    for obj in self.__dict__.values():
+        # Set a flag to prevent infinite loops
+        self.__dict__[self.FLAG_KEY] = True
+        
+        # If the child object is Serializable and hasn't been processed yet
+        if isinstance(obj, Serializable) and self.FLAG_KEY not in obj.__dict__:
+            obj.config(recursive=True, **kwargs)  # Recursive call
+            
+        # Clean up the flag
+        del self.__dict__[self.FLAG_KEY]
+```
+
+### Complete Example
+
+```python
+class MyModel(Serializable):
+    def __init__(self):
+        super().__init__()
+        self.data = [1, 2, 3]
+        self.params = {"lr": 0.01}
+        self._cache = {"temp": 123}
+        self.sub_model = MySubModel()  # Another Serializable object
+
+class MySubModel(Serializable):
+    def __init__(self):
+        super().__init__()
+        self.weights = [0.1, 0.2]
+        self._temp = "should not save"
+
+# Create the main object
+model = MyModel()
+
+# Configure serialization rules
+model.config(
+    recursive=True,              # Apply recursively to sub_model
+    dump_all=False,              # Do not save private attributes
+    include=["data", "params"],  # Explicitly save these attributes
+    exclude=["_cache"]            # Explicitly exclude this attribute
+)
+
+# After configuration:
+# - model.data → saved (in include list)
+# - model.params → saved (in include list)
+# - model._cache → not saved (in exclude list)
+# - model.sub_model.weights → saved (due to recursion and not excluded)
+# - model.sub_model._temp → not saved (private attribute with dump_all=False)
+```
+
+### Why is `FLAG_KEY` Needed?
+
+It prevents infinite recursion loops, especially when objects reference each other cyclically:
+
+```python
+class Node(Serializable):
+    def __init__(self):
+        self.child = None
+        self.parent = None
+
+# Create a circular reference
+a = Node()
+b = Node()
+a.child = b
+b.parent = a
+
+# Without FLAG_KEY, recursive configuration would cause:
+a.config(recursive=True)
+# a → b → a → b → ... Infinite loop!
+
+# With FLAG_KEY:
+a.config(recursive=True)
+# a sets flag, processes a
+# Encounter a.child = b, b has no flag, processes b
+# b sets flag, processes b
+# Encounter b.parent = a, a already has flag, skip
+# Recursion ends safely
+```
+
+### Summary
+
+| Feature | Description |
+|---------|-------------|
+| **Set Rules** | Control serialization behavior via `dump_all`, `include`, and `exclude` parameters |
+| **Recursive Application** | When `recursive=True`, automatically applies configuration to all `Serializable` child objects |
+| **Cycle Prevention** | Uses `FLAG_KEY` to mark already processed objects, avoiding infinite recursion |
