@@ -366,3 +366,130 @@ ln(total_return) = ln(1+r₁) + ln(1+r₂) + ... + ln(1+rn)
 | **Multi-period calculation** | Multiplicative | Additive |
 | **Range** | [-1, ∞) | (-∞, ∞) |
 | **Financial interpretation** | Discrete compounding | Continuous compounding |
+
+## Understanding `annualized_return = (1 + cumulative_return) ** (N / len(r)) - 1`
+
+**Source file**: [qlib/contrib/evaluate.py#L79](https://github.com/microsoft/qlib/blob/main/qlib/contrib/evaluate.py#L79)
+
+This formula calculates the **annualized return**, converting a total return over any time period into a standardized yearly return.
+
+### 1. Basic Concepts
+
+```python
+# Variables from the code:
+cumulative_return = Total return over the entire period (from start to end)
+len(r) = Number of periods in the return series (e.g., trading days)
+N = Annualization factor (e.g., 252 trading days in a year, 12 months in a year)
+
+# Goal:
+annualized_return = Annualized return (assuming yearly compounding)
+```
+
+### 2. Mathematical Derivation
+
+#### Step 1: From Total Return to Final Value
+
+```python
+# Starting with 1 unit of capital
+initial_value = 1
+
+# Final value after len(r) periods
+final_value = 1 + cumulative_return
+```
+
+#### Step 2: Define the Annualized Return
+
+Let `R` be the annualized return (what we call `annualized_return`). If returns are compounded annually, the value after `len(r)/N` years is:
+
+```python
+final_value = (1 + R) ^ (len(r) / N)
+```
+
+#### Step 3: Establish the Equation
+
+```python
+(1 + R) ^ (len(r) / N) = 1 + cumulative_return
+```
+
+#### Step 4: Solve for R
+
+```python
+(1 + R) ^ (len(r) / N) = 1 + cumulative_return
+
+# Take the (len(r)/N)-th root of both sides
+1 + R = (1 + cumulative_return) ^ (1 / (len(r) / N))
+1 + R = (1 + cumulative_return) ^ (N / len(r))
+
+# Isolate R
+R = (1 + cumulative_return) ^ (N / len(r)) - 1
+
+# This is exactly:
+annualized_return = (1 + cumulative_return) ** (N / len(r)) - 1
+```
+
+### 3. Numerical Examples
+
+#### Example 1: Monthly Data Annualization
+
+```python
+# 3 months of returns
+r = [0.01, 0.02, 0.015]  # 1%, 2%, 1.5%
+len(r) = 3  # 3 months
+
+# Calculate cumulative_return
+cumulative_return = (1.01 * 1.02 * 1.015) - 1 = 0.0457 (4.57%)
+
+# Annualization factor for monthly data
+N = 12  # 12 months in a year
+
+annualized_return = (1 + 0.0457) ** (12/3) - 1
+                  = 1.0457 ** 4 - 1
+                  = 1.195 - 1
+                  = 0.195 (19.5%)
+```
+
+#### Example 2: Daily Data Annualization
+
+```python
+# 60 days of returns
+# cumulative_return = (1+r₁)*(1+r₂)*...*(1+r₆₀) - 1
+# Assume cumulative_return = 0.10 (10%)
+
+len(r) = 60  # 60 trading days
+N = 252  # 252 trading days in a year (for Chinese market)
+
+annualized_return = (1 + 0.10) ** (252/60) - 1
+                  = 1.10 ** 4.2 - 1
+                  = 1.48 - 1
+                  = 0.48 (48%)
+```
+
+### 4. Comparison with Simple Annualization
+
+```python
+# Simple (linear) annualization - INCORRECT for compounding returns
+simple_annual = cumulative_return * (N / len(r))
+
+# Compound (correct) annualization - what Qlib uses
+compound_annual = (1 + cumulative_return) ** (N / len(r)) - 1
+
+# Example comparison
+cumulative_return = 0.10
+len(r) = 60
+N = 252
+
+simple_annual = 0.10 * (252/60) = 0.10 * 4.2 = 0.42 (42%)
+compound_annual = (1.10) ** (252/60) - 1 = 1.10 ** 4.2 - 1 = 1.48 - 1 = 0.48 (48%)
+# Compound annualization is higher because it accounts for the compounding effect
+```
+
+### Summary Table
+
+| Variable | Meaning | Example Value |
+|----------|---------|---------------|
+| `cumulative_return` | Total return over the entire period | 0.10 (10%) |
+| `len(r)` | Number of periods in the return series | 60 days |
+| `N` | Annualization factor (periods per year) | 252 (trading days) |
+| `N / len(r)` | Annualization multiplier | 4.2 |
+| `(1 + cumulative_return) ** (N/len(r))` | Scaled final value after one year | 1.48 |
+| `annualized_return` | Final annualized return | 0.48 (48%) |
