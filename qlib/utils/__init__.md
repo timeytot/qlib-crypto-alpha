@@ -158,7 +158,7 @@ config = {
 3. When `top == tail`, all elements have been processed
 4. BFS ensures level-by-level processing: first level (config), second level (model_dict, data_list), third level (params_dict)
 
-## `get_item_from_obj` Function Explanation
+# `get_item_from_obj` Function Explanation
 
 **Source files**:
 - [qlib/utils/\_\_init\_\_.py#L789](https://github.com/microsoft/qlib/blob/main/qlib/utils/__init__.py#L789)
