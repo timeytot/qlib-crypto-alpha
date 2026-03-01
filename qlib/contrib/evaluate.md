@@ -493,3 +493,45 @@ compound_annual = (1.10) ** (252/60) - 1 = 1.10 ** 4.2 - 1 = 1.48 - 1 = 0.48 (48
 | `N / len(r)` | Annualization multiplier | 4.2 |
 | `(1 + cumulative_return) ** (N/len(r))` | Scaled final value after one year | 1.48 |
 | `annualized_return` | Final annualized return | 0.48 (48%) |
+
+## Return Value Structure of `risk_analysis`
+
+**Source file**: [qlib/contrib/evaluate.py#L94](https://github.com/microsoft/qlib/blob/main/qlib/contrib/evaluate.py#L94)
+
+### Usage in `PortAnaRecord._generate`
+
+```python
+analysis = dict()
+analysis["excess_return_without_cost"] = risk_analysis(
+    report_normal["return"] - report_normal["bench"], 
+    freq=_analysis_freq
+)
+```
+
+### Return Value Example
+
+Assuming daily return series input with `mode="product"`:
+
+```python
+import pandas as pd
+import numpy as np
+
+# Example daily return data
+r = pd.Series([0.01, -0.02, 0.015, 0.005, -0.01])
+
+# Function call
+result = risk_analysis(r, freq="day", mode="product")
+
+print(result)
+```
+
+**Output which equals Structure of `analysis["excess_return_without_cost"]`**:
+
+```
+                 risk
+mean          -0.0001
+std            0.0146
+annualized_return -0.0245
+information_ratio -0.2535
+max_drawdown   -0.0202
+```
