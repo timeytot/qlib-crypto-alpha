@@ -158,6 +158,100 @@ config = {
 3. When `top == tail`, all elements have been processed
 4. BFS ensures level-by-level processing: first level (config), second level (model_dict, data_list), third level (params_dict)
 
+## `get_item_from_obj` Function Explanation
+
+**Source files**:
+- [qlib/utils/\_\_init\_\_.py#L789](https://github.com/microsoft/qlib/blob/main/qlib/utils/__init__.py#L789)
+- [qlib/utils/\_\_init\_\_.py#L734](https://github.com/microsoft/qlib/blob/main/qlib/utils/__init__.py#L734)
+
+This function is used to **retrieve a value from a nested configuration dictionary** using a dot-separated path string.
+
+### Function Signature
+
+```python
+def get_item_from_obj(config: dict, name_path: str) -> object:
+    """
+    Retrieve a value from a nested config dictionary following the dot-separated path.
+
+    Parameters
+    ----------
+    config : dict
+        Nested configuration dictionary
+    name_path : str
+        Dot-separated path string, e.g., "dataset.kwargs.segments.train.1"
+    
+    Returns
+    -------
+    object
+        The value pointed to by the path
+    """
+```
+
+### Line-by-Line Code Explanation
+
+```python
+cur_cfg = config  # Start from the root node
+
+# Split the path by dots and traverse level by level
+for k in name_path.split("."):
+    if isinstance(cur_cfg, dict):
+        # If current node is a dictionary, use key k to get the next node
+        cur_cfg = cur_cfg[k]  # May raise KeyError
+    
+    elif k.isdigit():
+        # If current node is a list/tuple and k is a numeric string, use it as an index
+        cur_cfg = cur_cfg[int(k)]  # May raise IndexError
+    
+    else:
+        raise ValueError(f"Error when getting {k} from cur_cfg")
+
+return cur_cfg  # Return the found value
+```
+
+### Execution Examples
+
+#### Example 1: Retrieving a Value from a Dictionary
+
+```python
+config = {
+    "dataset": {
+        "kwargs": {
+            "segments": {
+                "train": ("2008-01-02", "2014-12-31")
+            }
+        }
+    }
+}
+
+# Get the end date of the training set
+value = get_item_from_obj(config, "dataset.kwargs.segments.train.1")
+# Execution process:
+# 1. k = "dataset" → cur_cfg = config["dataset"]
+# 2. k = "kwargs"  → cur_cfg = config["dataset"]["kwargs"]
+# 3. k = "segments" → cur_cfg = config["dataset"]["kwargs"]["segments"]
+# 4. k = "train"    → cur_cfg = config["dataset"]["kwargs"]["segments"]["train"]
+# 5. k = "1"        → k.isdigit() = True → cur_cfg = cur_cfg[1] = "2014-12-31"
+# Returns "2014-12-31"
+```
+
+#### Example 2: Handling List/Tuple Indices
+
+```python
+config = {
+    "data": {
+        "values": [100, 200, 300, 400]
+    }
+}
+
+# Get the third element from the list
+value = get_item_from_obj(config, "data.values.2")
+# Execution process:
+# 1. k = "data"   → cur_cfg = config["data"]
+# 2. k = "values" → cur_cfg = config["data"]["values"] (It is list now)
+# 3. k = "2"      → k.isdigit() = True → cur_cfg = cur_cfg[2] = 300
+# Returns 300
+```
+
 # `flatten_dict` Function Explanation
 
 https://github.com/microsoft/qlib/blob/main/qlib/utils/__init__.py#L681
