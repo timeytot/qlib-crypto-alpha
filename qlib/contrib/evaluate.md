@@ -69,3 +69,93 @@ information_ratio = annual_return / annual_std
 | **Expanded** | (μ×N) / (σ×√N) | Easier to understand the annualization process |
 
 Your observation is very sharp! These two formulas are indeed different representations of the same mathematical expression.
+
+## `sum` vs `product` Mode Selection Guide
+
+**Source file**: [qlib/contrib/evaluate.py#L66](https://github.com/microsoft/qlib/blob/main/qlib/contrib/evaluate.py#L66)
+
+### One-Sentence Rule
+
+| Mode | Application Scenario | Mathematical Nature |
+|------|---------------------|---------------------|
+| **`sum`** | Short-term analysis, traditional finance, simple accumulation | Arithmetic returns |
+| **`product`** | Long-term analysis, compound interest calculation, real investment | Geometric returns (log returns) |
+
+### Detailed Comparison
+
+#### 1. `sum` Mode (Arithmetic Returns)
+
+```python
+# Applicable Scenarios:
+# - Daily or high-frequency trading
+# - Short-term analysis (days to weeks)
+# - Traditional financial reporting
+# - Simple comparison with benchmarks
+
+# Characteristics:
+# - Simple and intuitive calculation
+# - Assumes returns are linearly additive
+# - Ignores compound interest effects
+# - Adequate for short-term approximations
+```
+
+#### 2. `product` Mode (Geometric Returns)
+
+```python
+# Applicable Scenarios:
+# - Long-term investment analysis (months/years)
+# - Compound interest calculations
+# - Realistic return assessment
+# - Multi-period return accumulation
+
+# Characteristics:
+# - Considers compound interest effects
+# - Returns are multiplied over time
+# - More aligned with real-world investing
+# - More accurate for long-term analysis
+```
+
+### Practical Examples
+
+#### Short-term Analysis (Few Days)
+
+```python
+import numpy as np
+
+# 3-day returns
+r = [0.01, -0.02, 0.015]  # 1%, -2%, 1.5%
+
+# `sum` mode
+sum_return = np.sum(r)  # 0.005 (0.5%)
+# Simple addition, acceptable for short-term approximation
+
+# `product` mode
+product_return = np.prod(1 + np.array(r)) - 1  # 0.0047 (0.47%)
+# Considers compounding, more precise
+```
+
+#### Long-term Analysis (One Year)
+
+```python
+# One year of daily returns (simplified example)
+r = [0.001] * 252  # 0.1% daily gain
+
+# `sum` mode
+annual_sum = np.sum(r)  # 0.252 (25.2%)
+# Significantly overestimated!
+
+# `product` mode
+annual_product = np.prod(1 + np.array(r)) - 1  # 0.285 (28.5%)
+# Considers compounding, more realistic
+# (1.001)^252 - 1 ≈ 0.285
+```
+
+### Summary
+
+| Factor | Use `sum` | Use `product` |
+|--------|-----------|---------------|
+| **Time Horizon** | Short-term | Long-term |
+| **Compound Effect** | Ignored | Considered |
+| **Calculation Complexity** | Simple | More complex |
+| **Accuracy** | Approximate for short-term | Precise for long-term |
+| **Typical Use Cases** | High-frequency trading, intraday | Portfolio analysis, fund evaluation |
