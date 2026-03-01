@@ -258,3 +258,165 @@ def _get_arts(dirn):
         artifacts[dirn] = self.recorder.list_artifacts(dirn)  # Only one request ✅
     return artifacts[dirn]
 ```
+
+## Understanding `analysis_df = pd.concat(analysis)` and Related Code
+
+**Source file**: [qlib/contrib/evaluate.py#L94](https://github.com/microsoft/qlib/blob/main/qlib/contrib/evaluate.py#L94)
+
+This code appears in the `PortAnaRecord._generate` method and is used to **merge multiple risk analysis results and flatten them into a metric dictionary**.
+
+### Code Breakdown
+
+#### 1. Merging Multiple Risk Analysis Results
+
+```python
+analysis_df = pd.concat(analysis)  # type: pd.DataFrame
+```
+
+`analysis` is a dictionary containing two risk analysis results:
+
+```python
+analysis = {
+    "excess_return_without_cost": risk_analysis(...),  # Risk metrics for excess return without cost
+    "excess_return_with_cost": risk_analysis(...)       # Risk metrics for excess return with cost
+}
+
+# Each risk_analysis returns a structure like:
+#                 risk
+# mean           0.0002
+# std            0.0150
+# annualized_return 0.0476
+# information_ratio 0.0085
+# max_drawdown   -0.0300
+```
+
+`pd.concat(analysis)` merges these two DataFrames row-wise, resulting in a **MultiIndex DataFrame**:
+
+```python
+                                      risk
+excess_return_without_cost mean       0.0002
+                          std         0.0150
+                          annualized_return 0.0476
+                          information_ratio 0.0085
+                          max_drawdown -0.0300
+excess_return_with_cost   mean       0.0001
+                          std         0.0145
+                          annualized_return 0.0452
+                          information_ratio 0.0078
+                          max_drawdown -0.0280
+```
+
+- **Level 1 index**: Analysis type (`excess_return_without_cost` / `excess_return_with_cost`)
+- **Level 2 index**: Risk metric name (`mean`, `std`, ...)
+- **Column name**: `"risk"` (single column)
+
+#### 2. Extracting and Transforming Data
+
+```python
+analysis_dict = flatten_dict(analysis_df["risk"].unstack().T.to_dict())
+```
+
+This line performs multiple transformations. Let's break it down step by step:
+
+##### Step 1: Extract the `"risk"` Column
+
+```python
+risk_col = analysis_df["risk"]
+# Result is still a MultiIndex Series, just without the column name
+```
+
+##### Step 2: `unstack()`
+
+```python
+unstacked = risk_col.unstack()
+# Converts the second level index (metric names) into columns, 
+# with the first level index (analysis type) as rows
+```
+
+Result:
+
+```
+                           mean      std  annualized_return  information_ratio  max_drawdown
+excess_return_without_cost 0.0002  0.0150             0.0476             0.0085        -0.0300
+excess_return_with_cost    0.0001  0.0145             0.0452             0.0078        -0.0280
+```
+
+##### Step 3: Transpose with `.T`
+
+```python
+transposed = unstacked.T
+# Rows become columns, columns become rows
+```
+
+Result:
+
+```
+                     excess_return_without_cost  excess_return_with_cost
+mean                                      0.0002                   0.0001
+std                                       0.0150                   0.0145
+annualized_return                         0.0476                   0.0452
+information_ratio                         0.0085                   0.0078
+max_drawdown                              -0.0300                  -0.0280
+```
+
+##### Step 4: Convert to Dictionary with `.to_dict()`
+
+```python
+dict_result = transposed.to_dict()
+```
+
+Result:
+
+```python
+{
+    "excess_return_without_cost": {
+        "mean": 0.0002,
+        "std": 0.0150,
+        "annualized_return": 0.0476,
+        "information_ratio": 0.0085,
+        "max_drawdown": -0.0300
+    },
+    "excess_return_with_cost": {
+        "mean": 0.0001,
+        "std": 0.0145,
+        "annualized_return": 0.0452,
+        "information_ratio": 0.0078,
+        "max_drawdown": -0.0280
+    }
+}
+```
+
+##### Step 5: Flatten with `flatten_dict()`
+
+```python
+analysis_dict = flatten_dict(dict_result)
+# Flattens the nested dictionary into a single-level dictionary with dot-separated keys
+```
+
+Result:
+
+```python
+{
+    "excess_return_without_cost.mean": 0.0002,
+    "excess_return_without_cost.std": 0.0150,
+    "excess_return_without_cost.annualized_return": 0.0476,
+    "excess_return_without_cost.information_ratio": 0.0085,
+    "excess_return_without_cost.max_drawdown": -0.0300,
+    "excess_return_with_cost.mean": 0.0001,
+    "excess_return_with_cost.std": 0.0145,
+    "excess_return_with_cost.annualized_return": 0.0452,
+    "excess_return_with_cost.information_ratio": 0.0078,
+    "excess_return_with_cost.max_drawdown": -0.0280
+}
+```
+
+### Final Usage
+
+```python
+# Log the flattened metric dictionary to MLflow
+self.recorder.log_metrics(**{f"{_analysis_freq}.{k}": v for k, v in analysis_dict.items()})
+# Example:
+# "day.excess_return_without_cost.mean": 0.0002
+# "day.excess_return_without_cost.std": 0.0150
+# ...
+```
