@@ -190,28 +190,28 @@ def get_item_from_obj(config: dict, name_path: str) -> object:
 ### Line-by-Line Code Explanation
 
 ```python
-
-config : dict
-    e.g.
-    {'dataset': {'class': 'DatasetH',
-      'kwargs': {'handler': {'class': 'Alpha158',
-                             'kwargs': {'end_time': '2020-08-01',
-                                        'fit_end_time': '<dataset.kwargs.segments.train.1>',
-                                        'fit_start_time': '<dataset.kwargs.segments.train.0>',
-                                        'instruments': 'csi100',
-                                        'start_time': '2008-01-01'},
-                             'module_path': 'qlib.contrib.data.handler'},
-                 'segments': {'test': (Timestamp('2017-01-03 00:00:00'),
-                                       Timestamp('2019-04-08 00:00:00')),
-                              'train': (Timestamp('2008-01-02 00:00:00'),
-                                        Timestamp('2014-12-31 00:00:00')),
-                              'valid': (Timestamp('2015-01-05 00:00:00'),
-                                        Timestamp('2016-12-30 00:00:00'))}}
-    }}
-name_path : str
-    e.g.
-    "dataset.kwargs.segments.train.1"
-
+ """
+    config : dict
+        e.g.
+        {'dataset': {'class': 'DatasetH',
+          'kwargs': {'handler': {'class': 'Alpha158',
+                                 'kwargs': {'end_time': '2020-08-01',
+                                            'fit_end_time': '<dataset.kwargs.segments.train.1>',
+                                            'fit_start_time': '<dataset.kwargs.segments.train.0>',
+                                            'instruments': 'csi100',
+                                            'start_time': '2008-01-01'},
+                                 'module_path': 'qlib.contrib.data.handler'},
+                     'segments': {'test': (Timestamp('2017-01-03 00:00:00'),
+                                           Timestamp('2019-04-08 00:00:00')),
+                                  'train': (Timestamp('2008-01-02 00:00:00'),
+                                            Timestamp('2014-12-31 00:00:00')),
+                                  'valid': (Timestamp('2015-01-05 00:00:00'),
+                                            Timestamp('2016-12-30 00:00:00'))}}
+        }}
+    name_path : str
+        e.g.
+        "dataset.kwargs.segments.train.1"
+ """
 cur_cfg = config  # Start from the root node
 
 # Split the path by dots and traverse level by level
