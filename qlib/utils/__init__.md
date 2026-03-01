@@ -5,6 +5,12 @@
 ### Initial State
 
 ```python
+config_extend = {
+    "<MODEL>": "LGBModel",
+    "<LR>": 0.01,
+    "<TEST>": "test_data"
+}
+
 config = {
     "model": {
         "name": "<MODEL>",
