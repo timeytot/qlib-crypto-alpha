@@ -1,6 +1,6 @@
 ## BFS Traversal of Configuration Tree – Step-by-Step Execution
 
-[https://github.com/microsoft/qlib/blob/main/qlib/utils/data.py#L38](https://github.com/microsoft/qlib/blob/main/qlib/utils/__init__.py#L803)
+[https://github.com/microsoft/qlib/blob/main/qlib/utils/data.py#L803](https://github.com/microsoft/qlib/blob/main/qlib/utils/__init__.py#L803)
 
 ### Initial State
 
