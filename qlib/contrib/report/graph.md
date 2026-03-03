@@ -352,36 +352,58 @@ _graph_data = getattr(_graph_obj, "data")
 **Example of `_graph_data`** (from a ScatterGraph object with detailed traces):
 
 ```python
-_graph_data = [
-    # First trace: IC line with markers
+# ================== _graph_data for Subplot (row=1, col=1) ==================
+# This subplot contains IC, IC Smoothed, and Benchmark traces
+
+_graph_data_ic = [
+    # Trace 1: IC line with markers
     go.Scatter(
-        name='IC',                                      # Legend name
-        x=['2023-01-01', '2023-01-02', '2023-01-03'],  # X-axis data (dates)
-        y=[0.10, 0.15, 0.12],                           # Y-axis data (IC values)
-        mode='lines+markers',                            # Display mode: lines + points
-        line=dict(color='blue', width=2),                # Blue solid line
-        marker=dict(size=8, symbol='circle'),            # Circle markers
-        opacity=0.9,                                      # Transparency
-        showlegend=True                                   # Show in legend
+        name='IC',
+        x=['2023-01-01', '2023-01-02', '2023-01-03'],
+        y=[0.10, 0.15, 0.12],
+        mode='lines+markers',
+        line=dict(color='blue', width=2),
+        marker=dict(size=8, symbol='circle'),
+        showlegend=True
     ),
     
-    # Second trace: Rank IC line (dashed)
+    # Trace 2: IC Smoothed line (dashed)
+    go.Scatter(
+        name='IC Smoothed',
+        x=['2023-01-01', '2023-01-02', '2023-01-03'],
+        y=[0.11, 0.14, 0.13],
+        mode='lines',
+        line=dict(color='lightblue', width=1, dash='dash'),
+        showlegend=True
+    ),
+]
+
+# ================== _graph_data for Subplot (row=1, col=2) ==================
+# This subplot contains only Rank IC trace
+
+_graph_data_rank = [
     go.Scatter(
         name='Rank IC',
         x=['2023-01-01', '2023-01-02', '2023-01-03'],
         y=[0.12, 0.14, 0.11],
-        mode='lines',
-        line=dict(color='red', width=2, dash='dash'),    # Red dashed line
+        mode='lines+markers',
+        line=dict(color='red', width=2),
+        marker=dict(size=8, symbol='square'),
         showlegend=True
-    ),
-    
-    # Third trace: Benchmark line (dotted)
+    )
+]
+
+# ================== _graph_data for Subplot (row=2, col=1) ==================
+# This subplot contains only FFR trace
+
+_graph_data_ffr = [
     go.Scatter(
-        name='Benchmark',
+        name='FFR',
         x=['2023-01-01', '2023-01-02', '2023-01-03'],
-        y=[0.08, 0.09, 0.10],
-        mode='lines',
-        line=dict(color='gray', width=1, dash='dot'),    # Gray dotted line
+        y=[0.95, 0.98, 0.92],
+        mode='lines+markers',
+        line=dict(color='green', width=2),
+        marker=dict(size=8, symbol='diamond'),
         showlegend=True
     )
 ]
