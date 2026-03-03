@@ -216,7 +216,333 @@ Row 3, Col 1     Row 3, Col 2
 
 ### Why This Method is Needed
 
-| Scenario | User Action | Result |
-|----------|-------------|--------|
-| **Custom Layout** | Provide `sub_graph_data` | Uses user-specified positions and chart types |
+## `_init_figure()` Method Explanation
+
+**Source file**: [qlib/contrib/report/graph.py#L295](https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/graph.py#L295)
+
+This method is responsible for **creating the complete subplot figure** by assembling all the configured subplots, applying layout settings, and returning a Plotly figure object.
+
+### Method Overview
+
+```python
+def _init_figure(self):
+    # 1. Create an empty subplot grid
+    # 2. Generate and add each subplot's traces to their positions
+    # 3. Apply subplot-level layout settings (axis titles, etc.)
+    # 4. Apply global layout settings (title, size, theme)
+```
+
+---
+
+## Line-by-Line Explanation with Data Examples
+
+### Step 1: Create the Subplot Grid
+
+```python
+self._figure = make_subplots(**self._subplots_kwargs)
+```
+
+This creates an empty figure with a grid of subplots based on the pre-configured parameters.
+
+**Example `_subplots_kwargs`**:
+```python
+_subplots_kwargs = {
+    "rows": 3,
+    "cols": 2,
+    "shared_xaxes": False,
+    "shared_yaxes": False,
+    "vertical_spacing": 0.1,
+    "subplot_titles": ["IC", "Rank_IC", "FFR", "PA", "POS"]
+}
+
+# Result: Creates a 3x2 grid with 5 subplots (one empty cell)
+```
+
+---
+
+### Step 2: Iterate Through Subplot Configurations
+
+```python
+for column_name, column_map in self._sub_graph_data:
+```
+
+Iterates through each subplot's configuration data.
+
+**Example `_sub_graph_data`**:
+```python
+_sub_graph_data = [
+    ("IC", {"row": 1, "col": 1, "name": "IC", "kind": "ScatterGraph", "graph_kwargs": {}}),
+    ("Rank_IC", {"row": 1, "col": 2, "name": "Rank IC", "kind": "ScatterGraph", "graph_kwargs": {}}),
+    ("FFR", {"row": 2, "col": 1, "name": "FFR", "kind": "ScatterGraph", "graph_kwargs": {}}),
+    ("PA", {"row": 2, "col": 2, "name": "PA", "kind": "ScatterGraph", "graph_kwargs": {}}),
+    ("POS", {"row": 3, "col": 1, "name": "POS", "kind": "ScatterGraph", "graph_kwargs": {}})
+]
+```
+
+---
+
+### Step 3: Handle Different Input Types for `column_name`
+
+```python
+if isinstance(column_name, go.Figure):
+    # Case 1: User provided a complete Plotly Figure object
+    _graph_obj = column_name
+```
+
+**Example**:
+```python
+# If user passed a pre-created figure
+pre_fig = go.Figure(data=[go.Scatter(x=[1,2,3], y=[4,5,6], name="Pre-made")])
+column_name = pre_fig
+_graph_obj = column_name  # Use directly
+```
+
+```python
+elif isinstance(column_name, str):
+    # Case 2: Column name string - create a chart from data
+    temp_name = column_map.get("name", column_name.replace("_", " "))
+    kind = column_map.get("kind", self._kind_map.get("kind", "ScatterGraph"))
+    _graph_kwargs = column_map.get("graph_kwargs", self._kind_map.get("kwargs", {}))
+    
+    _graph_obj = BaseGraph.get_instance_with_graph_parameters(
+        kind,
+        **dict(
+            df=self._df.loc[:, [column_name]],
+            name_dict={column_name: temp_name},
+            graph_kwargs=_graph_kwargs,
+        ),
+    )
+```
+
+**Example for a string column**:
+```python
+# Input
+column_name = "IC"
+column_map = {
+    "row": 1, "col": 1, 
+    "name": "IC", 
+    "kind": "ScatterGraph", 
+    "graph_kwargs": {"mode": "lines"}
+}
+
+# Process:
+temp_name = "IC"  # from column_map["name"]
+kind = "ScatterGraph"
+_graph_kwargs = {"mode": "lines"}
+
+# Creates a ScatterGraph object that contains Plotly Scatter traces
+```
+
+```python
+else:
+    raise TypeError()
+```
+
+---
+
+### Step 4: Extract Traces and Add to Subplot
+
+```python
+row = column_map["row"]
+col = column_map["col"]
+
+_graph_data = getattr(_graph_obj, "data")
+```
+
+**Example of `_graph_data`** (from a ScatterGraph object with detailed traces):
+
+```python
+_graph_data = [
+    # First trace: IC line with markers
+    go.Scatter(
+        name='IC',                                      # Legend name
+        x=['2023-01-01', '2023-01-02', '2023-01-03'],  # X-axis data (dates)
+        y=[0.10, 0.15, 0.12],                           # Y-axis data (IC values)
+        mode='lines+markers',                            # Display mode: lines + points
+        line=dict(color='blue', width=2),                # Blue solid line
+        marker=dict(size=8, symbol='circle'),            # Circle markers
+        opacity=0.9,                                      # Transparency
+        showlegend=True                                   # Show in legend
+    ),
+    
+    # Second trace: Rank IC line (dashed)
+    go.Scatter(
+        name='Rank IC',
+        x=['2023-01-01', '2023-01-02', '2023-01-03'],
+        y=[0.12, 0.14, 0.11],
+        mode='lines',
+        line=dict(color='red', width=2, dash='dash'),    # Red dashed line
+        showlegend=True
+    ),
+    
+    # Third trace: Benchmark line (dotted)
+    go.Scatter(
+        name='Benchmark',
+        x=['2023-01-01', '2023-01-02', '2023-01-03'],
+        y=[0.08, 0.09, 0.10],
+        mode='lines',
+        line=dict(color='gray', width=1, dash='dot'),    # Gray dotted line
+        showlegend=True
+    )
+]
+```
+
+```python
+# Optional cleanup (commented out):
+# for _item in _graph_data:
+#     _item.pop('xaxis', None)
+#     _item.pop('yaxis', None)
+```
+
+```python
+for _g_obj in _graph_data:
+    self._figure.add_trace(_g_obj, row=row, col=col)
+```
+
+**Detailed examples of adding traces**:
+
+```python
+# For IC subplot (row=1, col=1) - adding multiple traces to the same subplot
+self._figure.add_trace(
+    go.Scatter(
+        name='IC',
+        x=['2023-01-01', '2023-01-02', '2023-01-03'],
+        y=[0.10, 0.15, 0.12],
+        mode='lines+markers',
+        line=dict(color='blue', width=2),
+        marker=dict(size=8, symbol='circle'),
+        showlegend=True
+    ),
+    row=1, col=1
+)
+
+self._figure.add_trace(
+    go.Scatter(
+        name='IC Smoothed',
+        x=['2023-01-01', '2023-01-02', '2023-01-03'],
+        y=[0.11, 0.14, 0.13],
+        mode='lines',
+        line=dict(color='lightblue', width=1, dash='dash'),
+        showlegend=True
+    ),
+    row=1, col=1
+)
+
+# For Rank_IC subplot (row=1, col=2)
+self._figure.add_trace(
+    go.Scatter(
+        name='Rank IC',
+        x=['2023-01-01', '2023-01-02', '2023-01-03'],
+        y=[0.12, 0.14, 0.11],
+        mode='lines+markers',
+        line=dict(color='red', width=2),
+        marker=dict(size=8, symbol='square'),
+        showlegend=True
+    ),
+    row=1, col=2
+)
+
+# For FFR subplot (row=2, col=1)
+self._figure.add_trace(
+    go.Scatter(
+        name='FFR',
+        x=['2023-01-01', '2023-01-02', '2023-01-03'],
+        y=[0.95, 0.98, 0.92],
+        mode='lines+markers',
+        line=dict(color='green', width=2),
+        marker=dict(size=8, symbol='diamond'),
+        showlegend=True
+    ),
+    row=2, col=1
+)
+```
+
+---
+
+### Step 5: Apply Subplot-Level Layout
+
+```python
+if self._sub_graph_layout is not None:
+    for k, v in self._sub_graph_layout.items():
+        self._figure["layout"][k].update(v)
+```
+
+**Example `_sub_graph_layout`**:
+```python
+_sub_graph_layout = {
+    "xaxis": {"title": "Date", "tickangle": 45},
+    "xaxis2": {"title": "Date", "tickangle": 45},
+    "xaxis3": {"title": "Date", "tickangle": 45},
+    "yaxis": {"title": "IC Value"},
+    "yaxis2": {"title": "Rank IC Value"},
+    "yaxis3": {"title": "FFR Value"}
+}
+
+# After applying:
+# Subplot (1,1): x-axis title "Date" (45°), y-axis title "IC Value"
+# Subplot (1,2): x-axis title "Date" (45°), y-axis title "Rank IC Value"
+# Subplot (2,1): x-axis title "Date" (45°), y-axis title "FFR Value"
+```
+
+---
+
+### Step 6: Apply Global Layout and Theme
+
+```python
+# Use Plotly 3.x default theme for compatibility
+self._figure["layout"].update(template=None)
+
+# Apply user's global layout settings
+self._figure["layout"].update(self._layout)
+```
+
+**Example `self._layout`**:
+```python
+self._layout = {
+    "title": "Model Performance Analysis",
+    "width": 1200,
+    "height": 800,
+    "showlegend": True,
+    "legend": {"x": 1, "y": 1, "bgcolor": "rgba(255, 255, 255, 0.5)"},
+    "font": {"size": 12},
+    "paper_bgcolor": "white",
+    "plot_bgcolor": "#f8f9fa"
+}
+```
+
+---
+
+## Complete Execution Example
+
+Assume we have:
+- DataFrame with 3 columns: `["IC", "Rank_IC", "FFR"]`
+- 2x2 grid (3 subplots, one empty)
+- All using `ScatterGraph` with `mode="lines+markers"`
+
+**Step-by-step execution**:
+
+1. **Creates empty 2x2 subplot grid** with titles
+2. **For each column**:
+   - `IC` → creates `ScatterGraph` → extracts 1-3 traces → adds to (1,1)
+   - `Rank_IC` → creates `ScatterGraph` → extracts traces → adds to (1,2)
+   - `FFR` → creates `ScatterGraph` → extracts traces → adds to (2,1)
+3. **Applies subplot axis settings**: x-axis titles "Date" with 45° rotation
+4. **Sets theme** to Plotly 3.x default and applies global layout with title, size, etc.
+
+**Final result**:
+```
+Row 1, Col 1                    Row 1, Col 2
+[IC Line Plot with markers]      [Rank IC Line Plot with markers]
+  Title: IC                        Title: Rank IC
+  X: "Date" (45°)                  X: "Date" (45°)
+  Y: "IC Value"                    Y: "Rank IC Value"
+
+Row 2, Col 1                    Row 2, Col 2
+[FFR Line Plot with markers]      [Empty]
+  Title: FFR
+  X: "Date" (45°)
+  Y: "FFR Value"
+```
+
+--- Uses user-specified positions and chart types |
 | **Default Layout** | `sub_graph_data=None` | Automatically calculates positions and uses default chart types |
