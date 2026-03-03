@@ -543,5 +543,3 @@ Row 2, Col 1                    Row 2, Col 2
   X: "Date" (45°)
   Y: "FFR Value"
 ```
---- Uses user-specified positions and chart types |
-| **Default Layout** | `sub_graph_data=None` | Automatically calculates positions and uses default chart types |
