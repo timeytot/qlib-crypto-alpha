@@ -1,10 +1,37 @@
+# Qlib Report Graph: Automatic Subplot Layout Logic
+
+**Source Code Location**  
+[https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/graph.py](https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/graph.py)
+
+The subplot generation in Qlib's reporting module follows a three-step process to create a grid of charts from a DataFrame automatically. Each step is handled by a dedicated method, and all aspects can be customized by the user.
+
+### Process Overview
+
+1. **`_init_subplots_kwargs()`**: Defines the overall grid structure (number of rows/columns, spacing, titles, axis sharing).
+2. **`_init_sub_graph_data()`**: Assigns each DataFrame column to a specific cell in the grid (`row`, `col`) and sets the default chart type and style.
+3. **`_init_figure()`**: Builds the final Plotly figure by creating the empty grid, generating the individual chart objects, and placing their traces into the correct subplot cells.
+
+### Configuration Parameters and Overrides
+
+The following table summarizes what each method configures and how a user can override the defaults.
+
+| Feature | Controlling Method | What it Sets | User Can Override? |
+|---------|--------------------|--------------|---------------------|
+| **Grid Size** | `_init_subplots_kwargs()` | `rows`, `cols`, `vertical_spacing` | Yes, by passing a custom `subplots_kwargs` dictionary to the constructor. |
+| **Subplot Titles** | `_init_subplots_kwargs()` | `subplot_titles` (defaults to DataFrame column names) | Yes, by providing a custom `subplots_kwargs` with a `subplot_titles` list. |
+| **Axis Sharing** | `_init_subplots_kwargs()` | `shared_xaxes=False`, `shared_yaxes=False` | Yes, by setting `shared_xaxes` or `shared_yaxes` to `True` in a custom `subplots_kwargs`. |
+| **Subplot Positioning** | `_init_sub_graph_data()` | `row` and `col` for each column | Yes, by providing a custom `sub_graph_data` list that explicitly defines the position for each subplot. |
+| **Chart Type & Style** | `_init_sub_graph_data()` | `kind` (e.g., `"ScatterGraph"`) and `graph_kwargs` (default styles) | Yes, by providing a custom `kind_map` dictionary for global defaults, or by defining `kind` and `graph_kwargs` per subplot in a custom `sub_graph_data` list. |
+
+This design provides a powerful default layout while maintaining full flexibility for users who need fine-grained control over their visualizations.
+
 ## Understanding `SubplotsGraph` Default Layout Initialization
 
 **Source file**: [qlib/contrib/report/graph.py#L295](https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/graph.py#L295)
 
 The following code snippets are core parts of the `_init_subplots_kwargs()` and `_init_sub_graph_data()` methods. They are used to **calculate and set the default parameters for the subplot grid** when the user does not provide custom layout configurations.
 
-### 1. Calculating the Number of Rows (`_init_subplots_kwargs`)
+### 1. Calculating the Number of Rows (`_init_subplots_kwargs`). This method defines the **overall grid structure** (how many rows/columns, spacing, titles, etc.).
 
 ```python
 _rows = math.ceil(len(self._df.columns) / 2)
@@ -104,7 +131,8 @@ Vertical spacing = 10% of subplot height
 ---
 
 ## Understanding `_init_sub_graph_data()`
-
+This method runs only when sub_graph_data is None (no user-defined layout).It creates a list that tells Plotly:
+“Column X should go to row Y, column Z, with title W, using graph type V.”
 This method **automatically generates configuration data for each subplot** when the user does not provide `sub_graph_data`. It assigns a position (row and column) in the grid to each column of the DataFrame.
 
 ### Key Variables
