@@ -113,3 +113,81 @@ Repeating this process for each day yields:
 | 2026-03-04 | 0.040 | 0.020 | 0.000 | -0.020 | -0.040 |
 
 ---
+
+## Understanding Long-Short and Long-Average Metrics in `_group_return`
+
+**Source file**: [qlib/contrib/report/analysis_model/analysis_model_performance.py#L50](https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_model/analysis_model_performance.py#L50)
+
+These two lines of code calculate two key derived metrics from the grouped return data: the **long-short portfolio return** and the **long portfolio excess return over the market average**.
+
+### 1. Long-Short Portfolio Return
+
+```python
+t_df["long-short"] = t_df["Group1"] - t_df["Group%d" % N]
+```
+
+- **`Group1`**: The average return of the highest predicted group (the long portfolio).
+- **`Group%d" % N`**: The average return of the lowest predicted group (the short portfolio). For example, when `N=5`, this becomes `Group5`.
+- **`long-short`**: The return of a strategy that goes long on the best group and short on the worst group.
+
+**Mathematical Formula**:
+```
+long-short = Long Return - Short Return
+```
+
+**Why Subtraction?**
+- Going long on `Group1` yields a return of `+Group1`.
+- Going short on `GroupN` yields a return of `-GroupN` (because shorting profits from a price decrease).
+- Total portfolio return = `+Group1 + (-GroupN)` = `Group1 - GroupN`.
+
+**Data Example**:
+
+| date | Group1 | Group5 | long-short |
+|------|--------|--------|------------|
+| 2026-03-02 | 0.045 | -0.035 | 0.045 - (-0.035) = **0.08** |
+| 2026-03-03 | 0.050 | -0.030 | 0.050 - (-0.030) = **0.08** |
+| 2026-03-04 | 0.040 | -0.040 | 0.040 - (-0.040) = **0.08** |
+
+---
+
+### 2. Long Portfolio Excess Return (Long-Average)
+
+```python
+t_df["long-average"] = t_df["Group1"] - pred_label.groupby(level="datetime", group_keys=False)["label"].mean()
+```
+
+- **`Group1`**: The average return of the long portfolio.
+- **Market Average**: The equal-weighted average return of all stocks for that day.
+- **`long-average`**: The excess return of the long portfolio compared to the overall market average.
+
+**Mathematical Formula**:
+```
+long-average = Long Return - Market Average Return
+```
+
+**Data Example**:
+
+| date | Group1 | Market Average | long-average |
+|------|--------|----------------|--------------|
+| 2026-03-02 | 0.045 | 0.005 | 0.045 - 0.005 = **0.04** |
+| 2026-03-03 | 0.050 | 0.010 | 0.050 - 0.010 = **0.04** |
+| 2026-03-04 | 0.040 | 0.000 | 0.040 - 0.000 = **0.04** |
+
+---
+
+### Comparing the Two Metrics
+
+| Metric | Formula | Meaning | Benchmark |
+|--------|---------|---------|-----------|
+| **long-short** | `Group1 - GroupN` | Absolute return of a market-neutral long-short portfolio | Zero (dollar-neutral) |
+| **long-average** | `Group1 - Market Average` | Excess return of the long portfolio | Market average |
+
+### Why Are These Metrics Important?
+
+1. **long-short**: Isolates the model's stock selection ability by removing market-wide effects.
+   - A positive value indicates the model can effectively distinguish between good and bad stocks.
+   - It is market-neutral and unaffected by general market movements.
+
+2. **long-average**: Measures the model's ability to pick winners.
+   - A positive value means the selected stocks outperform the average stock.
+   - It is useful for evaluating the potential alpha of a long-only strategy.
