@@ -370,6 +370,44 @@ else:
 
 ### Step 4: Extract Traces and Add to Subplot
 
+
+graph = ScatterGraph(df, name_dict={...}, layout={...}, graph_kwargs={...})
+
+↓
+
+__init__()
+  ├── self._df = df
+  ├── self._layout = layout or {}
+  ├── self._graph_kwargs = graph_kwargs or {}
+  ├── self._name_dict = name_dict or {col:col for col in df.columns}
+  ├── self._init_parameters()           # 设置 self._graph_type = "Scatter"
+  └── self._init_data()                 # ★ 核心入口
+
+      ↓
+
+      _init_data()
+        └── self.data = self._get_data()     # ★ 这里产生 trace 列表
+
+            ↓
+
+            _get_data()   （ScatterGraph 继承自 BaseGraph，使用父类的默认实现）
+
+              return [
+                  go.Scatter(                     # 第一个 trace
+                      x = df.index,
+                      y = df["列1"],
+                      name = name_dict["列1"],
+                      **self._graph_kwargs
+                  ),
+                  go.Scatter(                     # 第二个 trace
+                      x = df.index,
+                      y = df["列2"],
+                      name = name_dict["列2"],
+                      **self._graph_kwargs
+                  ),
+                  ...                             # 每列对应一个 go.Scatter
+              ]
+
 ```python
 row = column_map["row"]
 col = column_map["col"]
