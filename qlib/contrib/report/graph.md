@@ -370,7 +370,6 @@ else:
 
 ### Step 4: Extract Traces and Add to Subplot
 
-
     graph = ScatterGraph(df, name_dict={...}, layout={...}, graph_kwargs={...})
     
     ↓
