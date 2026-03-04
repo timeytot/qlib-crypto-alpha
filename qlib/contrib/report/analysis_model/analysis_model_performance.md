@@ -191,3 +191,208 @@ long-average = Long Return - Market Average Return
 2. **long-average**: Measures the model's ability to pick winners.
    - A positive value means the selected stocks outperform the average stock.
    - It is useful for evaluating the potential alpha of a long-only strategy.
+
+## Execution Flow of `group_scatter_figure` in `_group_return`
+
+**Source file**: [qlib/contrib/report/analysis_model/analysis_model_performance.py#L57](https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_model/analysis_model_performance.py#L57)
+
+This line of code creates the cumulative return chart for the grouped portfolios. While it appears simple, it triggers a complex chain of internal calls within the `ScatterGraph` class.
+
+### Overall Process Overview
+
+```
+1. Create ScatterGraph instance
+   ↓
+2. ScatterGraph.__init__() initialization
+   ↓
+3. Call _init_data() → _get_data() to generate traces
+   ↓
+4. Access .figure property to obtain final Figure
+   ↓
+5. Return Plotly Figure object
+```
+
+---
+
+### Detailed Execution Flow
+
+#### Step 1: Create `ScatterGraph` Instance
+
+```python
+group_scatter_figure = ScatterGraph(
+    t_df.cumsum(),  # Data: cumulative returns DataFrame
+    layout=dict(    # Layout settings
+        title="Cumulative Return",
+        xaxis=dict(
+            tickangle=45, 
+            rangebreaks=kwargs.get("rangebreaks", guess_plotly_rangebreaks(t_df.index))
+        ),
+    ),
+).figure
+```
+
+**What happens here**:
+- `t_df.cumsum()` is a DataFrame containing cumulative returns for all groups (Group1~Group5, long-short, long-average)
+- The `layout` dictionary defines the chart title and X-axis styling
+- The `rangebreaks` parameter hides non-trading days (like weekends), either user-provided or auto-detected by `guess_plotly_rangebreaks()`
+
+#### Step 2: Call `ScatterGraph.__init__`
+
+`ScatterGraph` inherits from `BaseGraph`, so it calls the parent's `__init__`:
+
+```python
+class ScatterGraph(BaseGraph):
+    _name = "scatter"  # Set chart type name
+    # No own __init__, uses parent's directly
+```
+
+Entering `BaseGraph.__init__`:
+
+```python
+def __init__(self, df, layout=None, graph_kwargs=None, name_dict=None, **kwargs):
+    self._df = df                    # Store data
+    self._layout = layout or {}       # Store layout
+    self._graph_kwargs = graph_kwargs or {}
+    
+    # If no name_dict provided, auto-create {column_name: column_name}
+    if name_dict is None:
+        self._name_dict = {col: col for col in df.columns}
+    
+    self._init_parameters(**kwargs)  # Initialize parameters
+    self._init_data()                 # ★ Core: generate data
+```
+
+#### Step 3: `_init_parameters()` Sets Chart Type
+
+```python
+def _init_parameters(self, **kwargs):
+    # self._name comes from ScatterGraph's "scatter"
+    self._graph_type = self._name.lower().capitalize()  # "scatter" → "Scatter"
+```
+
+#### Step 4: `_init_data()` Calls `_get_data()` to Generate Traces
+
+```python
+def _init_data(self):
+    if self._df.empty:
+        raise ValueError("df is empty.")
+    self.data = self._get_data()  # ← Generate all traces
+```
+
+`_get_data()` method (parent class default implementation):
+
+```python
+def _get_data(self) -> list:
+    _data = [
+        self.get_instance_with_graph_parameters(
+            graph_type=self._graph_type,  # "Scatter"
+            x=self._df.index,              # X-axis: dates
+            y=self._df[_col],              # Y-axis: current column's data
+            name=_name,                     # Legend name
+            **self._graph_kwargs             # Other parameters (e.g., mode="lines+markers")
+        )
+        for _col, _name in self._name_dict.items()  # Iterate over each column
+    ]
+    return _data
+```
+
+**Data Example**:
+Assuming `t_df.cumsum()` has 7 columns (Group1~Group5 + long-short + long-average):
+
+```python
+self._name_dict = {
+    "Group1": "Group1",
+    "Group2": "Group2",
+    "Group3": "Group3",
+    "Group4": "Group4",
+    "Group5": "Group5",
+    "long-short": "long-short",
+    "long-average": "long-average"
+}
+
+# _get_data() returns _data containing 7 traces
+_data = [
+    go.Scatter(name='Group1', x=dates, y=group1_values, ...),
+    go.Scatter(name='Group2', x=dates, y=group2_values, ...),
+    ...
+    go.Scatter(name='long-average', x=dates, y=long_avg_values, ...)
+]
+```
+
+#### Step 5: `.figure` Property Generates Final Figure
+
+```python
+@property
+def figure(self) -> go.Figure:
+    _figure = go.Figure(
+        data=self.data,              # Trace list from previous step
+        layout=self._get_layout()     # Get layout
+    )
+    # Use Plotly 3.x default theme
+    _figure["layout"].update(template=None)
+    return _figure
+```
+
+`_get_layout()` method:
+
+```python
+def _get_layout(self) -> go.Layout:
+    return go.Layout(**self._layout)  # Unpack dict as layout parameters
+```
+
+**Layout Example**:
+```python
+self._layout = {
+    "title": "Cumulative Return",
+    "xaxis": {
+        "tickangle": 45,
+        "rangebreaks": [{"values": ["2026-03-07"], "dvalue": 172800000}]
+    }
+}
+
+# Converted to
+layout = go.Layout(
+    title="Cumulative Return",
+    xaxis=dict(tickangle=45, rangebreaks=[...])
+)
+```
+
+---
+
+### Complete Call Chain Diagram
+
+```
+ScatterGraph(t_df.cumsum(), layout=...)
+    │
+    ↓ [Instantiation]
+ScatterGraph.__init__ (inherits from BaseGraph)
+    ├─ self._df = t_df.cumsum()
+    ├─ self._layout = {...}
+    ├─ self._name_dict = {col:col for col in df.columns} (7 columns → 7 key-value pairs)
+    ├─ self._init_parameters()
+    │     └─ self._graph_type = "Scatter"
+    └─ self._init_data()
+          └─ self.data = self._get_data()
+                │
+                ↓ [List comprehension, 7 iterations]
+                for _col, _name in self._name_dict.items():
+                    go.Scatter(
+                        x=df.index,
+                        y=df[_col],
+                        name=_name,
+                        mode=None,  # from self._graph_kwargs
+                        ...
+                    )
+                │
+                ↓
+                self.data = [trace1, trace2, ..., trace7]
+    │
+    ↓ [Access .figure property]
+    .figure
+    ├─ go.Figure(data=self.data, layout=self._get_layout())
+    ├─ _figure.layout.update(template=None)
+    └─ return _figure
+    │
+    ↓
+group_scatter_figure = Plotly Figure object (containing 7 lines)
+```
