@@ -556,7 +556,3 @@ def figure(self):
 ### One‑Sentence Summary
 
 The code creates a 1×2 subplot where the left side uses `DistplotGraph` (overriding the default `HistogramGraph`) to show IC distribution with a density curve, and the right side directly reuses a pre‑generated Q‑Q figure — this is why you see a distribution plot with a curve on the left instead of a plain histogram.
-
-### One‑Sentence Summary
-
-The code creates a 1×2 subplot where the left side uses `DistplotGraph` (overriding the default `HistogramGraph`) to show IC distribution with a density curve, and the right side directly reuses a pre‑generated Q‑Q figure — this is why you see a distribution plot with a curve on the left instead of a plain histogram.
