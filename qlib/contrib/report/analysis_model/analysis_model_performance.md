@@ -393,3 +393,138 @@ ScatterGraph.__init__ (inherits from BaseGraph)
     ├─ _figure.layout.update(template=None)
     └─ return _figure
 
+## Execution Flow of `ic_hist_figure` Creation in `SubplotsGraph`
+
+**Source code reference**: [Qlib repository](https://github.com/microsoft/qlib) (see `qlib/contrib/report/graph.py` for `SubplotsGraph` implementation)
+
+The following code creates a 1×2 subplot figure:
+- **Left**: IC histogram + kernel density curve (using `DistplotGraph`)
+- **Right**: IC Q-Q plot (reused from pre-generated `_qqplot_fig`)
+
+```python
+ic_hist_figure = SubplotsGraph(
+    _ic_df.dropna(),
+    kind_map=dict(kind="HistogramGraph", kwargs=dict()),
+    subplots_kwargs=dict(
+        rows=1,
+        cols=2,
+        print_grid=False,
+        subplot_titles=["IC", "IC %s Dist. Q-Q" % dist_name],
+    ),
+    sub_graph_data=_sub_graph_data,
+    layout=dict(
+        yaxis2=dict(title="Observed Quantile"),
+        xaxis2=dict(title=f"{dist_name} Distribution Quantile"),
+    ),
+).figure
+```
+
+---
+
+### Step-by-Step Execution Flow
+
+#### 1. `SubplotsGraph.__init__()` is called
+
+Receives and stores:
+- **`df`** = `_ic_df.dropna()` (a DataFrame with a single column "IC")
+- **`kind_map`** = `{"kind": "HistogramGraph", "kwargs": {}}`
+- **`subplots_kwargs`** = `{"rows":1, "cols":2, "print_grid":False, "subplot_titles":["IC", "IC ..."]}`
+- **`sub_graph_data`** = `_sub_graph_data` (pre‑prepared list with two items)
+- **`layout`** = `{"yaxis2": {...}, "xaxis2": {...}}`
+
+#### 2. Internal attributes are initialized
+
+```python
+self._df = _ic_df.dropna()
+self._kind_map = {"kind": "HistogramGraph", ...}
+self._subplots_kwargs = {...}
+self._sub_graph_data = _sub_graph_data   # Not None → auto-generation is skipped
+```
+
+#### 3. `_init_sub_graph_data()` is **NOT** executed
+
+Because `self._sub_graph_data` is provided, the automatic column‑based subplot generation is bypassed.
+
+#### 4. `_init_figure()` is called (core logic)
+
+```python
+self._figure = make_subplots(**self._subplots_kwargs)
+# Creates an empty 1×2 subplot grid with titles:
+# ["IC", "IC Normal Dist. Q‑Q"] (or similar)
+```
+
+Then it loops over each item in `self._sub_graph_data`:
+
+##### Item 1 – Left subplot (`col=1`)
+
+Typical content:
+```python
+("IC", {"row":1, "col":1, "name":"", "kind":"DistplotGraph", "graph_kwargs":{"bin_size":...}})
+```
+
+- `column_name` is a string → enters `elif isinstance(column_name, str)` branch
+- `kind = "DistplotGraph"` (explicitly overridden by `sub_graph_data`)
+- Creates a `DistplotGraph` instance:
+  - `df = self._df.loc[:, ["IC"]]`
+  - `graph_kwargs = {"bin_size": ...}`
+- `DistplotGraph._get_data()` → generates **2 traces** (histogram + KDE curve)
+
+##### Item 2 – Right subplot (`col=2`)
+
+Typical content:
+```python
+(_qqplot_fig, {"row":1, "col":2})
+```
+
+- `column_name` is a `go.Figure` → enters `if isinstance(column_name, go.Figure)` branch
+- Directly assigns `_graph_obj = _qqplot_fig`
+- `_graph_data = _qqplot_fig.data` → **2 traces** (scatter points + reference line)
+
+#### 5. For each graph object, traces are added
+
+```python
+_graph_data = getattr(_graph_obj, "data")
+for _g_obj in _graph_data:
+    self._figure.add_trace(_g_obj, row=row, col=col)
+```
+
+- **Left (`col=1`)**: adds histogram + density curve traces
+- **Right (`col=2`)**: adds Q‑Q scatter + fitted line traces
+
+#### 6. Subplot‑specific layout is applied (if exists)
+
+Usually skipped because `_sub_graph_layout` is `None` in this case.
+
+#### 7. Global layout and theme are applied
+
+```python
+self._figure["layout"].update(template=None)   # disable default theme
+self._figure["layout"].update(self._layout)    # apply user layout
+```
+
+**Key effect**:
+- `yaxis2.title = "Observed Quantile"`
+- `xaxis2.title = "Normal Distribution Quantile"` (or other `dist_name`)
+
+#### 8. `figure` property is returned
+
+```python
+@property
+def figure(self):
+    return self._figure
+```
+
+---
+
+### Final Figure Content
+
+- **1 row × 2 columns** subplot
+- **Left subplot** (`"IC"`): Histogram + Kernel Density Curve of IC values (from `DistplotGraph`)
+- **Right subplot** (`"IC ... Dist. Q‑Q"`): Q‑Q plot (scatter points + reference line, reused from `_plot_qq`)
+- Custom axis titles on the second subplot
+
+---
+
+### One‑Sentence Summary
+
+The code creates a 1×2 subplot where the left side uses `DistplotGraph` (overriding the default `HistogramGraph`) to show IC distribution with a density curve, and the right side directly reuses a pre‑generated Q‑Q figure — this is why you see a distribution plot with a curve on the left instead of a plain histogram.
