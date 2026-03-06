@@ -421,6 +421,34 @@ ic_hist_figure = SubplotsGraph(
 
 ---
 
+## Execution Flow of `ic_hist_figure` Creation in `SubplotsGraph`
+
+**Source file**: [qlib/contrib/report/analysis_model/analysis_model_performance.py#L204](https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_model/analysis_model_performance.py#L204)
+
+The following code creates a 1×2 subplot figure:
+- **Left**: IC histogram + kernel density curve (using `DistplotGraph`)
+- **Right**: IC Q-Q plot (reused from pre-generated `_qqplot_fig`)
+
+```python
+ic_hist_figure = SubplotsGraph(
+    _ic_df.dropna(),
+    kind_map=dict(kind="HistogramGraph", kwargs=dict()),
+    subplots_kwargs=dict(
+        rows=1,
+        cols=2,
+        print_grid=False,
+        subplot_titles=["IC", "IC %s Dist. Q-Q" % dist_name],
+    ),
+    sub_graph_data=_sub_graph_data,
+    layout=dict(
+        yaxis2=dict(title="Observed Quantile"),
+        xaxis2=dict(title=f"{dist_name} Distribution Quantile"),
+    ),
+).figure
+```
+
+---
+
 ### Step-by-Step Execution Flow
 
 #### 1. `SubplotsGraph.__init__()` is called
@@ -524,6 +552,10 @@ def figure(self):
 - Custom axis titles on the second subplot
 
 ---
+
+### One‑Sentence Summary
+
+The code creates a 1×2 subplot where the left side uses `DistplotGraph` (overriding the default `HistogramGraph`) to show IC distribution with a density curve, and the right side directly reuses a pre‑generated Q‑Q figure — this is why you see a distribution plot with a curve on the left instead of a plain histogram.
 
 ### One‑Sentence Summary
 
