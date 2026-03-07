@@ -2,7 +2,7 @@
 
 **Source Code Reference**: [https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_position/risk_analysis.py#L66](https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_position/risk_analysis.py#L66)
 
-This analysis covers two critical lines of code that form the foundation of the monthly risk analysis pipeline: creating the groupby object and extracting the group keys for iteration.
+This analysis covers critical lines of code that form the foundation of the monthly risk analysis pipeline: creating the groupby object, extracting group keys for iteration, calculating month-end dates, and aggregating monthly results.
 
 ---
 
@@ -323,33 +323,207 @@ Original GroupBy Object
         # Process months in order
 ```
 
-### 2.3 The Result: `gp_month` in the Loop
+---
+
+## Part 3: Calculating Month-End Dates
 
 ```python
-gp_month = sorted(set(report_normal_gp.size().index))
-
-for gp_m in gp_month:  # gp_m iterates in perfect chronological order
-    year, month = gp_m[0], gp_m[1]
-    print(f"Processing {year}-{month:02d}")
-    
-    # Get the actual data for this month
-    monthly_data = report_normal_gp.get_group(gp_m)
-    
-    # Skip months with insufficient data
-    if len(monthly_data) < 3:
-        continue
-        
-    # Calculate monthly risk metrics...
-    month_days = pd.Timestamp(year=gp_m[0], month=gp_m[1], day=1).days_in_month
-    month_end_date = pd.Timestamp(year=gp_m[0], month=gp_m[1], day=month_days)
-    _temp_df = _get_risk_analysis_data_with_report(monthly_data, month_end_date)
+month_days = pd.Timestamp(year=gp_m[0], month=gp_m[1], day=1).days_in_month
 ```
 
-**What `gp_m` contains**:
-- Type: `tuple` of `(year, month)`
-- Example: `(2017, 1)`, `(2017, 2)`, `(2017, 3)`, ...
-- Used as the key to retrieve data with `.get_group()`
-- Used to construct the month-end date
+### 3.1 Step-by-Step Breakdown
+
+#### Step 1: `gp_m[0]` and `gp_m[1]`
+- `gp_m` is a tuple `(year, month)`
+- `gp_m[0]` = year (e.g., 2017)
+- `gp_m[1]` = month (e.g., 1 for January)
+
+#### Step 2: `pd.Timestamp(year=..., month=..., day=1)`
+Creates a timestamp pointing to the **first day** of that month:
+
+```python
+# If gp_m = (2017, 1)
+pd.Timestamp(year=2017, month=1, day=1)
+# Output: Timestamp('2017-01-01 00:00:00')
+```
+
+#### Step 3: `.days_in_month`
+This is a Pandas Timestamp property that returns the number of days in that month:
+
+```python
+# For January 1, 2017
+pd.Timestamp(2017, 1, 1).days_in_month
+# Output: 31
+
+# For February 1, 2017  
+pd.Timestamp(2017, 2, 1).days_in_month
+# Output: 28 (non-leap year)
+
+# For February 1, 2020 (leap year)
+pd.Timestamp(2020, 2, 1).days_in_month  
+# Output: 29
+```
+
+### 3.2 Why This Approach?
+
+This line calculates the **total days in the month** to construct the month's last day:
+
+```python
+# Full usage in the code:
+month_days = pd.Timestamp(year=gp_m[0], month=gp_m[1], day=1).days_in_month
+month_end_date = pd.Timestamp(year=gp_m[0], month=gp_m[1], day=month_days)
+
+# If gp_m = (2017, 1):
+# month_days = 31
+# month_end_date = Timestamp('2017-01-31')
+```
+
+Different months have different lengths, and leap years add complexity:
+| Month | Days | Special Case |
+|-------|------|--------------|
+| January | 31 | Fixed |
+| February | 28 or 29 | 29 in leap years |
+| March | 31 | Fixed |
+| April | 30 | Fixed |
+| ... | ... | ... |
+
+Using `.days_in_month` **automatically handles all cases** without manual leap year checking.
+
+---
+
+## Part 4: Aggregating Monthly Results
+
+```python
+_temp_df = _get_risk_analysis_data_with_report(
+    _m_report_normal, 
+    month_end_date
+)
+_monthly_df = pd.concat([_monthly_df, _temp_df], sort=False)
+```
+
+### 4.1 Part 1: Calling `_get_risk_analysis_data_with_report()`
+
+This function (explained in previous analyses) calculates risk metrics for one month of data:
+
+```python
+def _get_risk_analysis_data_with_report(
+    report_normal_df: pd.DataFrame,  # All trading days in current month
+    date: pd.Timestamp,               # Last day of that month
+) -> pd.DataFrame:
+    # Calculate excess return series and call risk_analysis()
+    # Returns a MultiIndex DataFrame with a date column
+```
+
+**Input Example (January 2017)**:
+- `_m_report_normal`: Contains all 20 trading days in January with `return`, `cost`, `bench`, `turnover`
+- `date`: `Timestamp('2017-01-31')` (last day of the month)
+
+**Output Example (`_temp_df`)**:
+
+```
+                                             risk        date
+excess_return_without_cost mean               0.002345   2017-01-31
+                           std                0.004567   2017-01-31
+                           annualized_return  0.156789   2017-01-31
+                           information_ratio  1.876543   2017-01-31
+                           max_drawdown      -0.065432   2017-01-31
+excess_return_with_cost    mean               0.001234   2017-01-31
+                           std                0.004566   2017-01-31
+                           annualized_return  0.125678   2017-01-31
+                           information_ratio  1.543210   2017-01-31
+                           max_drawdown      -0.076543   2017-01-31
+```
+
+### 4.2 Part 2: `pd.concat([_monthly_df, _temp_df], sort=False)`
+
+This line appends the newly calculated monthly data to the accumulating dataset:
+
+```python
+_monthly_df = pd.concat([_monthly_df, _temp_df], sort=False)
+```
+
+#### Step-by-Step Demonstration:
+
+**First Loop (January 2017)**:
+```python
+_monthly_df = pd.DataFrame()  # Initially empty
+_temp_df = <January 2017 data>
+
+# After concat:
+_monthly_df = 
+                                             risk        date
+excess_return_without_cost mean               0.002345   2017-01-31
+                           std                0.004567   2017-01-31
+                           ...                ...        ...
+excess_return_with_cost    mean               0.001234   2017-01-31
+                           ...                ...        ...
+```
+
+**Second Loop (February 2017)**:
+```python
+_temp_df = <February 2017 data>
+
+# After concat:
+_monthly_df = 
+                                             risk        date
+excess_return_without_cost mean               0.002345   2017-01-31  ← January data
+                           std                0.004567   2017-01-31
+                           ...                ...        ...
+excess_return_with_cost    mean               0.001234   2017-01-31
+                           ...                ...        ...
+excess_return_without_cost mean               0.003456   2017-02-28  ← February data (appended)
+                           std                0.005678   2017-02-28
+                           ...                ...        ...
+excess_return_with_cost    mean               0.002345   2017-02-28
+                           ...                ...        ...
+```
+
+**Third Loop (March 2017)**: Continue appending...
+
+### 4.3 The Role of `sort=False`
+
+The `sort=False` parameter controls whether the columns are sorted alphabetically during concatenation.
+
+#### With `sort=True` (Default Behavior):
+```python
+# If columns from different DataFrames are in different orders
+df1 = pd.DataFrame({'B': [1], 'A': [2]})  # Columns: B, A
+df2 = pd.DataFrame({'A': [3], 'B': [4]})  # Columns: A, B
+
+result = pd.concat([df1, df2], sort=True)
+# Columns are sorted alphabetically: A, B
+# Result:
+#    A  B
+# 0  2  1
+# 0  3  4
+```
+
+#### With `sort=False` (Current Implementation):
+```python
+result = pd.concat([df1, df2], sort=False)
+# Columns maintain the order from the first DataFrame
+# Result:
+#    B  A
+# 0  1  2
+# 0  4  3
+```
+
+**Why `sort=False` is used here:**
+
+1. **Column Order Consistency**: All `_temp_df` DataFrames from `_get_risk_analysis_data_with_report()` have identical column structures (always `'risk'` and `'date'` columns in that order)
+2. **Performance**: Skipping unnecessary sorting saves computational time, especially when concatenating many months
+3. **Predictable Output**: The resulting `_monthly_df` maintains the same column order throughout
+
+### 4.4 The Final `_monthly_df`
+
+After processing all months, `_monthly_df` contains:
+- **Rows**: All risk metrics for all months stacked vertically
+- **Columns**: `'risk'` (metric values) and `'date'` (month-end timestamps)
+- **Index**: MultiIndex with:
+  - Level 0: Metric category (`excess_return_without_cost`, `excess_return_with_cost`)
+  - Level 1: Risk indicator (`mean`, `std`, `annualized_return`, etc.)
+
+This structure is perfectly prepared for the next step: extracting time series for each risk indicator with `_get_monthly_analysis_with_feature()`.
 
 ---
 
@@ -376,9 +550,28 @@ for gp_m in gp_month:
     │
     ├──► monthly_data = report_normal_gp.get_group(gp_m)  # Clean DatetimeIndex
     ├──► if len(monthly_data) >= 3:
-    │       ├──► Calculate month_end_date from gp_m
-    │       └──► _get_risk_analysis_data_with_report(monthly_data, month_end_date)
+    │       │
+    │       │ # Calculate month-end date
+    │       ├──► month_days = pd.Timestamp(gp_m[0], gp_m[1], 1).days_in_month
+    │       ├──► month_end = pd.Timestamp(gp_m[0], gp_m[1], month_days)
+    │       │
+    │       │ # Calculate monthly risk metrics
+    │       ├──► _temp_df = _get_risk_analysis_data_with_report(monthly_data, month_end)
+    │       │
+    │       │ # Append to accumulating DataFrame
+    │       └──► _monthly_df = pd.concat([_monthly_df, _temp_df], sort=False)
+    │
     └──► Continue to next month
+
+    │
+    ▼
+_monthly_df (all months stacked)
+    │
+    ▼
+_get_monthly_analysis_with_feature() for each risk indicator
+    │
+    ▼
+Monthly time series plots
 ```
 
 The clean design ensures:
@@ -386,3 +579,5 @@ The clean design ensures:
 - **Complete coverage** of all months with data (`.size().index`)
 - **Correct chronological processing** (`sorted()`)
 - **Defensive programming** (`set()` for uniqueness guarantee)
+- **Accurate month-end dates** (`.days_in_month` handles all calendar variations)
+- **Efficient aggregation** (`sort=False` for consistent, fast concatenation)
