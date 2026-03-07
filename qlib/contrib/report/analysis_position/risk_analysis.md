@@ -574,3 +574,224 @@ _get_monthly_analysis_with_feature() for each risk indicator
 Monthly time series plots
 ```
 
+# _get_risk_analysis_figure function process
+
+**Source Code Reference**: [https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_position/risk_analysis.py#L91](https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_position/risk_analysis.py#L91)
+
+You've noticed something important! The `'risk'` column name **disappears** during this transformation. Let me explain why this happens and why it's the right design choice.
+
+---
+
+## Step 1: Tracing the 'risk' Column Through the Pipeline
+
+### In `_get_risk_analysis_data_with_report()` - The Origin
+
+```python
+def _get_risk_analysis_data_with_report(...):
+    analysis = dict()
+    analysis["excess_return_without_cost"] = risk_analysis(...)  # Returns DataFrame with 'risk' column
+    analysis["excess_return_with_cost"] = risk_analysis(...)     # Returns DataFrame with 'risk' column
+    
+    analysis_df = pd.concat(analysis)  # MultiIndex rows, single 'risk' column
+    analysis_df["date"] = date
+    return analysis_df
+
+# risk_analysis() returns:
+#                         risk
+# mean                 0.000692
+# std                  0.005374
+# annualized_return    0.174495
+# information_ratio    2.045576
+# max_drawdown        -0.079103
+```
+
+### In `_monthly_df` - The 'risk' Column Persists
+
+```python
+# _monthly_df from _get_monthly_risk_analysis_with_report()
+                                             risk        date
+excess_return_without_cost mean               0.002345   2017-01-31
+                           std                0.004567   2017-01-31
+                           annualized_return  0.156789   2017-01-31
+                           ...                ...        ...
+excess_return_with_cost    mean               0.001234   2017-01-31
+                           ...                ...        ...
+```
+
+### In `_name_df` - Still There
+
+```python
+# After _monthly_df_gp.get_group(feature).set_index(["level_0", "level_1"])
+_name_df = ...
+
+                                            risk       date
+level_0                    level_1          
+excess_return_without_cost annualized_return 0.156789  2017-01-31
+excess_return_with_cost    annualized_return 0.125678  2017-01-31
+...                                           ...       ...
+```
+
+---
+
+## Step 2: What Happens During `pivot_table`
+
+### Before Pivot - Structure
+```
+DataFrame: _name_df
+├── Index: MultiIndex (level_0, level_1)
+└── Columns:
+    ├── 'risk' (the actual values)
+    └── 'date' (row identifier for pivot)
+```
+
+### During Pivot - The 'risk' Column is Consumed
+
+```python
+_temp_df = _name_df.pivot_table(
+    index="date",           # 'date' becomes the new row index
+    values=["risk"],        # 'risk' provides the cell values
+    columns=_name_df.index   # Index becomes column headers
+)
+```
+
+The `values=["risk"]` parameter **consumes** the 'risk' column. Its contents are distributed into the cells of the new DataFrame, and the column name `'risk'` is **promoted** to become the **top level of the column MultiIndex**.
+
+### After Pivot - 'risk' Becomes Level 0 of Column MultiIndex
+
+```python
+print(_temp_df.columns)
+
+MultiIndex([('risk', ('excess_return_without_cost', 'annualized_return')),
+            ('risk', ('excess_return_with_cost', 'annualized_return'))],
+           names=[None, None])
+```
+
+**What happened:**
+- The column name `'risk'` is now the **first level** of the MultiIndex
+- The original index tuples become the **second level**
+- The actual values that were in the 'risk' column are now in the DataFrame cells
+
+### Visual Representation
+
+```
+BEFORE PIVOT:
+┌─────────────────────────────────────────────────────────────┐
+│ _name_df                                                    │
+├───────────────────┬───────────────────┬─────────┬──────────┤
+│ Index (level_0)   │ Index (level_1)   │ risk    │ date     │ ← 'risk' is a column
+├───────────────────┼───────────────────┼─────────┼──────────┤
+│ without_cost      │ annualized        │ 0.156789│ 2017-01-31│
+│ with_cost         │ annualized        │ 0.125678│ 2017-01-31│
+│ without_cost      │ annualized        │ 0.167890│ 2017-02-28│
+│ with_cost         │ annualized        │ 0.134567│ 2017-02-28│
+└───────────────────┴───────────────────┴─────────┴──────────┘
+                           │
+                           │ pivot_table(values=["risk"])
+                           ▼
+
+AFTER PIVOT:
+┌─────────────────────────────────────────────────────────────┐
+│ _temp_df                                                     │
+├───────────────┬─────────────────────────────────────────────┤
+│               │ risk                                         │ ← 'risk' becomes top level
+│               ├─────────────────────┬───────────────────────┤
+│ date          │ (without_cost, annualized) │ (with_cost, annualized) │
+├───────────────┼─────────────────────┼───────────────────────┤
+│ 2017-01-31    │ 0.156789            │ 0.125678              │ ← values now in cells
+│ 2017-02-28    │ 0.167890            │ 0.134567              │
+└───────────────┴─────────────────────┴───────────────────────┘
+```
+
+---
+
+## Step 3: The Lambda Function - Why 'risk' Disappears
+
+### Understanding `x[-1]` in Context
+
+```python
+# Each column x is a tuple: ('risk', ('excess_return_without_cost', 'annualized_return'))
+# x[0] = 'risk'
+# x[-1] = ('excess_return_without_cost', 'annualized_return')
+
+new_names = map(lambda x: "_".join(x[-1]), _temp_df.columns)
+```
+
+**The lambda function deliberately IGNORES `x[0]` (the 'risk' part)!**
+
+### Why This Makes Sense
+
+1. **'risk' is redundant information** - All columns contain risk values, so having 'risk' in every column name adds no value
+2. **The meaningful identifiers** are the strategy category and metric name
+3. **Column names become cleaner** - `'excess_return_without_cost_annualized_return'` vs `'risk_excess_return_without_cost_annualized_return'`
+
+### Comparison
+
+```python
+# What would happen if we kept 'risk':
+# (Hypothetical) lambda x: "_".join(x)  # Join both levels
+new_names_bad = ['risk_excess_return_without_cost_annualized_return', 
+                 'risk_excess_return_with_cost_annualized_return']
+
+# What actually happens (current code):
+new_names_good = ['excess_return_without_cost_annualized_return', 
+                  'excess_return_with_cost_annualized_return']
+```
+
+---
+
+## Step 4: Visualizing the Complete Transformation
+
+```
+Phase 1: Original Data (with 'risk' column)
+┌─────────────────────────────────────────────────────┐
+│         level_0     level_1    risk        date     │
+│ 0  without_cost  annualized  0.156789  2017-01-31   │
+│ 1  with_cost     annualized  0.125678  2017-01-31   │
+│ 2  without_cost  annualized  0.167890  2017-02-28   │
+│ 3  with_cost     annualized  0.134567  2017-02-28   │
+└─────────────────────────────────────────────────────┘
+                           │
+                           │ pivot_table(index="date", values=["risk"], columns=index)
+                           ▼
+
+Phase 2: After Pivot (MultiIndex columns with 'risk')
+┌─────────────────────────────────────────────────────┐
+│ date        risk                                    │
+│             (without_cost, annualized)  (with_cost, annualized) │
+├────────────┼──────────────────────────┼──────────────────────────┤
+│ 2017-01-31 │ 0.156789                 │ 0.125678                 │
+│ 2017-02-28 │ 0.167890                 │ 0.134567                 │
+└────────────┴──────────────────────────┴──────────────────────────┘
+                           │
+                           │ map(lambda x: "_".join(x[-1]))
+                           ▼
+
+Phase 3: Final Result ('risk' removed)
+┌─────────────────────────────────────────────────────┐
+│ date        without_cost_annualized  with_cost_annualized │
+├────────────┼────────────────────────┼──────────────────────┤
+│ 2017-01-31 │ 0.156789               │ 0.125678             │
+│ 2017-02-28 │ 0.167890               │ 0.134567             │
+└────────────┴────────────────────────┴──────────────────────┘
+```
+
+---
+
+## Step 5: Why This is the Right Design Choice
+
+### 1. **No Information Loss**
+
+The fact that these are "risk" values is preserved in:
+- The **context** of the function (it's called `_get_monthly_analysis_with_feature`)
+- The **variable names** (`_temp_df` contains risk metrics)
+- The **column names** (they include the specific metric like `annualized_return`)
+
+### 2. **Cleaner Column Names**
+
+```python
+# With 'risk' (verbose and redundant)
+column_with_risk = 'risk_excess_return_without_cost_annualized_return'
+
+# Without 'risk' (clean and readable)
+column_clean = 'excess_return_without_cost_annualized_return'
+```
