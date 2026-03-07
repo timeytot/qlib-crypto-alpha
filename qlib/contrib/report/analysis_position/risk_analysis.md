@@ -2,7 +2,11 @@
 
 **Source Code Reference**: [https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_position/risk_analysis.py#L66](https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_position/risk_analysis.py#L66)
 
-This line of code is the **starting point** of the entire monthly risk analysis pipeline. Let me break down every component in detail:
+This analysis covers two critical lines of code that form the foundation of the monthly risk analysis pipeline: creating the groupby object and extracting the group keys for iteration.
+
+---
+
+## Part 1: Creating the GroupBy Object
 
 ```python
 report_normal_gp = report_normal_df.groupby(
@@ -11,9 +15,9 @@ report_normal_gp = report_normal_df.groupby(
 )
 ```
 
-## 1. Code Structure Breakdown
+### 1.1 Code Structure Breakdown
 
-### Left Side: `report_normal_gp`
+#### Left Side: `report_normal_gp`
 - This is a **DataFrameGroupBy object**
 - It doesn't perform immediate computation, but rather "remembers" how the data should be grouped
 - You can later:
@@ -21,9 +25,9 @@ report_normal_gp = report_normal_df.groupby(
   - Apply aggregations with `.size()`, `.mean()`, etc.
   - Transform or filter grouped data
 
-### Right Side: Three Critical Components
+#### Right Side: Three Critical Components
 
-#### **Part 1: The Data Being Grouped - `report_normal_df`**
+##### **Part 1: The Data Being Grouped - `report_normal_df`**
 
 ```python
 # Structure of report_normal_df
@@ -45,7 +49,7 @@ Key characteristics:
   - `bench`: Benchmark return
   - `turnover`: Portfolio turnover rate
 
-#### **Part 2: The Group Keys**
+##### **Part 2: The Group Keys**
 
 ```python
 [report_normal_df.index.year, report_normal_df.index.month]
@@ -68,11 +72,11 @@ report_normal_df.index.month
 2. Uses the **combination** `(year, month)` as the grouping key
 3. Each row is assigned to a group based on its date's year and month
 
-#### **Part 3: `group_keys=False`**
+##### **Part 3: `group_keys=False`**
 
 This parameter controls whether group keys appear in the output index (as explained in detail below).
 
-## 2. Visualization of the Grouping Process
+### 1.2 Visualization of the Grouping Process
 
 ```python
 # Original data (showing only date and return)
@@ -92,7 +96,7 @@ date        return    year  month  (group key)
 ...         ...       ...  ...    ──┘
 ```
 
-## 3. Internal Structure of the GroupBy Object
+### 1.3 Internal Structure of the GroupBy Object
 
 After creation, the groupby object has this logical structure in memory:
 
@@ -120,9 +124,9 @@ report_normal_gp = {
 }
 ```
 
-## 4. The Critical Role of `group_keys=False` in This Function
+### 1.4 The Critical Role of `group_keys=False`
 
-### Without `group_keys=False` (Default Behavior)
+#### Without `group_keys=False` (Default Behavior)
 
 ```python
 # Default group_keys=True
@@ -146,7 +150,7 @@ MultiIndex([(2017-01-04, 2017, 1),
 
 **The Problem**: The index becomes a **triple-level MultiIndex**! The original date index is expanded, with `year` and `month` added as additional index levels. This creates unnecessary complexity for downstream operations.
 
-### With `group_keys=False` (Current Implementation)
+#### With `group_keys=False` (Current Implementation)
 
 ```python
 # group_keys=False
@@ -167,7 +171,7 @@ DatetimeIndex(['2017-01-04', '2017-01-05', '2017-01-06', ...],
 
 **Perfect**: The index remains a clean, single-level **DatetimeIndex**!
 
-## 5. Why This Matters for the Pipeline
+### 1.5 Why This Matters for the Pipeline
 
 The `group_keys=False` setting is crucial because:
 
@@ -176,32 +180,107 @@ The `group_keys=False` setting is crucial because:
 3. **Memory efficiency**: Avoiding unnecessary MultiIndex levels reduces complexity
 4. **Code readability**: No need to deal with multi-level indexing when accessing data
 
-## 6. What Happens Next in the Pipeline
+---
 
-This groupby object is used in the subsequent loop:
+## Part 2: Extracting Group Keys for Iteration
 
 ```python
-gp_month = sorted(set(report_normal_gp.size().index))  # Get all (year, month) combinations
-
-for gp_m in gp_month:  # gp_m = (2017, 1), (2017, 2), ...
-    _m_report_normal = report_normal_gp.get_group(gp_m)  # Get data for this month
-    
-    if len(_m_report_normal) < 3:  # Skip months with insufficient data
-        continue
-        
-    # Calculate monthly risk metrics...
-    _temp_df = _get_risk_analysis_data_with_report(_m_report_normal, month_end_date)
+gp_month = sorted(set(report_normal_gp.size().index))
 ```
 
-The clean DatetimeIndex from `group_keys=False` ensures that `_get_risk_analysis_data_with_report()` receives exactly what it expects: a DataFrame with dates as the index and no extra levels to complicate the calculations.
+This line extracts **all unique (year, month) combinations** from the grouped data and prepares them for chronological iteration.
 
-# Understanding `gp_month = sorted(set(report_normal_gp.size().index))`
+### 2.1 Step-by-Step Breakdown
 
-**Source Code Reference**: [https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_position/risk_analysis.py#L69](https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_position/risk_analysis.py#L69)
+#### Step 1: `report_normal_gp.size()`
 
-This line extracts **all unique (year, month) combinations** from the grouped data and prepares them for iteration. Let's break it down step by step:
+```python
+monthly_counts = report_normal_gp.size()
+print(monthly_counts)
+```
 
-# Visualizing the Transformation
+**Output**:
+```
+year  month
+2017  1        20  # January 2017 has 20 trading days
+      2        19  # February 2017 has 19 trading days
+      3        23  # March 2017 has 23 trading days
+      4        21
+      5        22
+      6        20
+      7        21
+      8        22
+      9        20
+      10       23
+      11       21
+      12       20
+2018  1        22  # January 2018 has 22 trading days
+      2        18
+      3        22
+      4        21
+      ...
+dtype: int64
+```
+
+**What `.size()` does**:
+- Returns a **Series** with:
+  - **Index**: The group keys (MultiIndex of year and month)
+  - **Values**: Number of rows (trading days) in each group
+- This is an **aggregation** operation that actually computes something (unlike the groupby object itself, which is lazy)
+
+#### Step 2: `.index` - Extract the Group Keys
+
+```python
+group_keys = report_normal_gp.size().index
+print(group_keys)
+```
+
+**Output**:
+```
+MultiIndex([(2017, 1), (2017, 2), (2017, 3), (2017, 4), (2017, 5), (2017, 6),
+            (2017, 7), (2017, 8), (2017, 9), (2017, 10), (2017, 11), (2017, 12),
+            (2018, 1), (2018, 2), (2018, 3), (2018, 4), ...],
+           names=['year', 'month'])
+```
+
+Now we have **all unique (year, month) combinations** that exist in the data.
+
+#### Step 3: `set()` - Ensure Uniqueness (Optional Safety)
+
+```python
+unique_keys = set(report_normal_gp.size().index)
+```
+
+**Why use `set()`?**
+- The index from `.size()` is already unique (each group appears once)
+- But using `set()` is a **defensive programming** practice:
+  - Guarantees uniqueness even if something unexpected happens
+  - Makes the code more robust
+  - No downside (minimal performance cost)
+
+#### Step 4: `sorted()` - Ensure Chronological Order
+
+```python
+gp_month = sorted(set(report_normal_gp.size().index))
+print(gp_month)
+```
+
+**Output**:
+```
+[(2017, 1), (2017, 2), (2017, 3), (2017, 4), (2017, 5), (2017, 6),
+ (2017, 7), (2017, 8), (2017, 9), (2017, 10), (2017, 11), (2017, 12),
+ (2018, 1), (2018, 2), (2018, 3), (2018, 4), ...]
+```
+
+**Why sorting is critical**:
+- Sets are **unordered** in Python
+- Without sorting, months would be processed in random order
+- For time series analysis, **chronological order is essential**:
+  - Charts should show time progression
+  - Calculations that depend on order (like cumulative metrics) would break
+- Tuples sort naturally: first by year, then by month
+
+### 2.2 Visualizing the Transformation
 
 ```
 Original GroupBy Object
@@ -242,3 +321,68 @@ Original GroupBy Object
     ▼
     for gp_m in gp_month:
         # Process months in order
+```
+
+### 2.3 The Result: `gp_month` in the Loop
+
+```python
+gp_month = sorted(set(report_normal_gp.size().index))
+
+for gp_m in gp_month:  # gp_m iterates in perfect chronological order
+    year, month = gp_m[0], gp_m[1]
+    print(f"Processing {year}-{month:02d}")
+    
+    # Get the actual data for this month
+    monthly_data = report_normal_gp.get_group(gp_m)
+    
+    # Skip months with insufficient data
+    if len(monthly_data) < 3:
+        continue
+        
+    # Calculate monthly risk metrics...
+    month_days = pd.Timestamp(year=gp_m[0], month=gp_m[1], day=1).days_in_month
+    month_end_date = pd.Timestamp(year=gp_m[0], month=gp_m[1], day=month_days)
+    _temp_df = _get_risk_analysis_data_with_report(monthly_data, month_end_date)
+```
+
+**What `gp_m` contains**:
+- Type: `tuple` of `(year, month)`
+- Example: `(2017, 1)`, `(2017, 2)`, `(2017, 3)`, ...
+- Used as the key to retrieve data with `.get_group()`
+- Used to construct the month-end date
+
+---
+
+## Summary: The Complete Pipeline
+
+```
+report_normal_df (daily data)
+    │
+    ▼
+GroupBy [(year, month)] with group_keys=False
+    │
+    ├──► report_normal_gp (GroupBy object)
+    │       │
+    │       │ .size().index
+    │       ▼
+    │   MultiIndex of all (year, month) combinations
+    │       │
+    │       │ set() + sorted()
+    │       ▼
+    │   gp_month = [(2017,1), (2017,2), ...] (chronological order)
+    │
+    ▼
+for gp_m in gp_month:
+    │
+    ├──► monthly_data = report_normal_gp.get_group(gp_m)  # Clean DatetimeIndex
+    ├──► if len(monthly_data) >= 3:
+    │       ├──► Calculate month_end_date from gp_m
+    │       └──► _get_risk_analysis_data_with_report(monthly_data, month_end_date)
+    └──► Continue to next month
+```
+
+The clean design ensures:
+- **Efficient grouping** without index pollution (`group_keys=False`)
+- **Complete coverage** of all months with data (`.size().index`)
+- **Correct chronological processing** (`sorted()`)
+- **Defensive programming** (`set()` for uniqueness guarantee)
