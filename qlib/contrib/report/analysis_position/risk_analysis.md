@@ -576,7 +576,7 @@ Monthly time series plots
 
 # Deep Dive: `groupby(["level_1"], group_keys=False)` in Monthly Risk Analysis
 
-**Source Code Reference**: [https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_position/risk_analysis.py#L88](https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_position/risk_analysis.py#L88)
+**Source Code Reference**: [https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_position/risk_analysis.py#L95](https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_position/risk_analysis.py#L95)
 
 This line is the **critical filtering mechanism** that separates different risk metrics for individual processing. Let me provide a comprehensive analysis.
 
