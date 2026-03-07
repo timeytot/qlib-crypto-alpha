@@ -194,3 +194,51 @@ for gp_m in gp_month:  # gp_m = (2017, 1), (2017, 2), ...
 ```
 
 The clean DatetimeIndex from `group_keys=False` ensures that `_get_risk_analysis_data_with_report()` receives exactly what it expects: a DataFrame with dates as the index and no extra levels to complicate the calculations.
+
+# Understanding `gp_month = sorted(set(report_normal_gp.size().index))`
+
+**Source Code Reference**: [https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_position/risk_analysis.py#L69](https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_position/risk_analysis.py#L69)
+
+This line extracts **all unique (year, month) combinations** from the grouped data and prepares them for iteration. Let's break it down step by step:
+
+# Visualizing the Transformation
+
+```
+Original GroupBy Object
+    │
+    ▼
+┌─────────────────────────────────────┐
+│ (2017,1): 20 days                   │
+│ (2017,2): 19 days                   │
+│ (2017,3): 23 days                   │
+│ (2018,1): 22 days                   │
+│ (2017,12): 20 days                  │
+│ (2018,2): 18 days                   │
+│ ... (in no particular order)        │
+└─────────────────────────────────────┘
+    │
+    │ .size().index
+    ▼
+┌─────────────────────────────────────┐
+│ MultiIndex([                        │
+│    (2017, 1), (2017, 2), (2017, 3), │
+│    (2017, 12), (2018, 1), (2018, 2),│
+│    ... (still in creation order)    │
+│ ])                                  │
+└─────────────────────────────────────┘
+    │
+    │ set() + sorted()
+    ▼
+┌─────────────────────────────────────┐
+│ [(2017, 1), (2017, 2), (2017, 3),  │
+│  (2017, 4), (2017, 5), (2017, 6),  │
+│  (2017, 7), (2017, 8), (2017, 9),  │
+│  (2017, 10), (2017, 11), (2017, 12),│
+│  (2018, 1), (2018, 2), (2018, 3),  │
+│  ...]                               │
+└─────────────────────────────────────┘
+    │
+    │ Used in for loop
+    ▼
+    for gp_m in gp_month:
+        # Process months in order
