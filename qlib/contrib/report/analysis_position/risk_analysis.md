@@ -574,10 +574,148 @@ _get_monthly_analysis_with_feature() for each risk indicator
 Monthly time series plots
 ```
 
-The clean design ensures:
-- **Efficient grouping** without index pollution (`group_keys=False`)
-- **Complete coverage** of all months with data (`.size().index`)
-- **Correct chronological processing** (`sorted()`)
-- **Defensive programming** (`set()` for uniqueness guarantee)
-- **Accurate month-end dates** (`.days_in_month` handles all calendar variations)
-- **Efficient aggregation** (`sort=False` for consistent, fast concatenation)
+# Deep Dive: `groupby(["level_1"], group_keys=False)` in Monthly Risk Analysis
+
+**Source Code Reference**: [https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_position/risk_analysis.py#L88](https://github.com/microsoft/qlib/blob/main/qlib/contrib/report/analysis_position/risk_analysis.py#L88)
+
+This line is the **critical filtering mechanism** that separates different risk metrics for individual processing. Let me provide a comprehensive analysis.
+
+---
+
+## Line in Context
+
+```python
+_monthly_df_gp = monthly_df.reset_index().groupby(["level_1"], group_keys=False)
+```
+
+---
+
+## Step 1: Understanding the Input After `reset_index()`
+
+### Before `reset_index()` - Original `monthly_df`
+
+```python
+# monthly_df has a MultiIndex with two levels
+                                             risk        date
+excess_return_without_cost mean               0.002345   2017-01-31
+                           std                0.004567   2017-01-31
+                           annualized_return  0.156789   2017-01-31
+                           information_ratio  1.876543   2017-01-31
+                           max_drawdown      -0.065432   2017-01-31
+excess_return_with_cost    mean               0.001234   2017-01-31
+                           std                0.004566   2017-01-31
+                           annualized_return  0.125678   2017-01-31
+                           information_ratio  1.543210   2017-01-31
+                           max_drawdown      -0.076543   2017-01-31
+excess_return_without_cost mean               0.003456   2017-02-28
+                           std                0.005678   2017-02-28
+                           annualized_return  0.167890   2017-02-28
+                           information_ratio  1.987654   2017-02-28
+                           max_drawdown      -0.054321   2017-02-28
+... (more months)
+```
+
+**Index Structure**:
+- **Level 0** (`level_0`): Strategy category (`excess_return_without_cost`, `excess_return_with_cost`)
+- **Level 1** (`level_1`): Risk metric name (`mean`, `std`, `annualized_return`, `information_ratio`, `max_drawdown`)
+
+### After `reset_index()`
+
+```python
+monthly_df_reset = monthly_df.reset_index()
+print(monthly_df_reset.head(10))
+
+    level_0                    level_1         risk       date
+0   excess_return_without_cost  mean           0.002345   2017-01-31
+1   excess_return_without_cost  std            0.004567   2017-01-31
+2   excess_return_without_cost  annualized_return 0.156789 2017-01-31
+3   excess_return_without_cost  information_ratio 1.876543 2017-01-31
+4   excess_return_without_cost  max_drawdown   -0.065432 2017-01-31
+5   excess_return_with_cost     mean           0.001234   2017-01-31
+6   excess_return_with_cost     std            0.004566   2017-01-31
+7   excess_return_with_cost     annualized_return 0.125678 2017-01-31
+8   excess_return_with_cost     information_ratio 1.543210 2017-01-31
+9   excess_return_with_cost     max_drawdown   -0.076543 2017-01-31
+10  excess_return_without_cost  mean           0.003456   2017-02-28
+11  excess_return_without_cost  std            0.005678   2017-02-28
+12  excess_return_without_cost  annualized_return 0.167890 2017-02-28
+13  excess_return_without_cost  information_ratio 1.987654 2017-02-28
+14  excess_return_without_cost  max_drawdown   -0.054321 2017-02-28
+15  excess_return_with_cost     mean           0.002345   2017-02-28
+16  excess_return_with_cost     std            0.005677   2017-02-28
+17  excess_return_with_cost     annualized_return 0.134567 2017-02-28
+18  excess_return_with_cost     information_ratio 1.612345 2017-02-28
+19  excess_return_with_cost     max_drawdown   -0.065432 2017-02-28
+```
+
+**What `reset_index()` does**:
+- Converts the MultiIndex into regular columns named `level_0` and `level_1`
+- Creates a default integer index (0, 1, 2, ...)
+- Makes the DataFrame compatible with standard `groupby` operations
+
+---
+
+## Step 2: The GroupBy Operation
+
+```python
+_monthly_df_gp = monthly_df_reset.groupby(["level_1"], group_keys=False)
+```
+
+### What This Does
+
+It groups the DataFrame by the **risk metric name** (the original level_1 index). This creates **5 separate groups**:
+
+| Group Key | Contains | Number of Rows |
+|-----------|----------|----------------|
+| `"mean"` | All mean values for all months and both strategy categories | 2 rows × number of months |
+| `"std"` | All std values for all months and both strategy categories | 2 rows × number of months |
+| `"annualized_return"` | All annualized_return values | 2 rows × number of months |
+| `"information_ratio"` | All information_ratio values | 2 rows × number of months |
+| `"max_drawdown"` | All max_drawdown values | 2 rows × number of months |
+
+### Internal Structure of the GroupBy Object
+
+```python
+_monthly_df_gp = {
+    "mean": DataFrame([
+        [0, "excess_return_without_cost", "mean", 0.002345, "2017-01-31"],
+        [5, "excess_return_with_cost", "mean", 0.001234, "2017-01-31"],
+        [10, "excess_return_without_cost", "mean", 0.003456, "2017-02-28"],
+        [15, "excess_return_with_cost", "mean", 0.002345, "2017-02-28"],
+        ...  # All mean rows for all months
+    ]),
+    
+    "std": DataFrame([
+        [1, "excess_return_without_cost", "std", 0.004567, "2017-01-31"],
+        [6, "excess_return_with_cost", "std", 0.004566, "2017-01-31"],
+        [11, "excess_return_without_cost", "std", 0.005678, "2017-02-28"],
+        [16, "excess_return_with_cost", "std", 0.005677, "2017-02-28"],
+        ...  # All std rows for all months
+    ]),
+    
+    "annualized_return": DataFrame([
+        [2, "excess_return_without_cost", "annualized_return", 0.156789, "2017-01-31"],
+        [7, "excess_return_with_cost", "annualized_return", 0.125678, "2017-01-31"],
+        [12, "excess_return_without_cost", "annualized_return", 0.167890, "2017-02-28"],
+        [17, "excess_return_with_cost", "annualized_return", 0.134567, "2017-02-28"],
+        ...  # All annualized_return rows for all months
+    ]),
+    
+    "information_ratio": DataFrame([
+        [3, "excess_return_without_cost", "information_ratio", 1.876543, "2017-01-31"],
+        [8, "excess_return_with_cost", "information_ratio", 1.543210, "2017-01-31"],
+        [13, "excess_return_without_cost", "information_ratio", 1.987654, "2017-02-28"],
+        [18, "excess_return_with_cost", "information_ratio", 1.612345, "2017-02-28"],
+        ...  # All information_ratio rows for all months
+    ]),
+    
+    "max_drawdown": DataFrame([
+        [4, "excess_return_without_cost", "max_drawdown", -0.065432, "2017-01-31"],
+        [9, "excess_return_with_cost", "max_drawdown", -0.076543, "2017-01-31"],
+        [14, "excess_return_without_cost", "max_drawdown", -0.054321, "2017-02-28"],
+        [19, "excess_return_with_cost", "max_drawdown", -0.065432, "2017-02-28"],
+        ...  # All max_drawdown rows for all months
+    ]),
+}
+```
+
