@@ -84,27 +84,22 @@ result = fetch_df_by_col(df, ['meta'])
 # Returns MultiIndex columns with only 'meta' group
 ```
 
-````markdown
 # Qlib `fetch_df_by_index`
 
-https://github.com/microsoft/qlib/blob/main/qlib/data/dataset/utils.py#L41
+**Source Code**: https://github.com/microsoft/qlib/blob/main/qlib/data/dataset/utils.py#L41
 
 ## Purpose
 
 Select data from a **MultiIndex DataFrame** by specifying:
-
 - a **selector**
 - a specific **index level**
 
 Typical use cases:
-
 - select stocks by **date**
 - select dates by **stock**
 - perform **MultiIndex slicing**
 
----
-
-# Source Code
+## Source Code
 
 ```python
 def fetch_df_by_index(
@@ -130,234 +125,165 @@ def fetch_df_by_index(
             return df
     else:
         return df.loc[pd.IndexSlice[idx_slc],]
-````
+```
 
----
+## Example DataFrame
 
-# Example DataFrame
-
-Typical Qlib dataset structure.
+Typical Qlib dataset structure with MultiIndex (datetime, instrument):
 
 ```python
 import pandas as pd
 
 index = pd.MultiIndex.from_tuples(
-[
-("2024-01-01", "AAPL"),
-("2024-01-01", "MSFT"),
-("2024-01-02", "AAPL"),
-("2024-01-02", "MSFT"),
-],
-names=["datetime", "instrument"]
+    [
+        ("2024-01-01", "AAPL"),
+        ("2024-01-01", "MSFT"),
+        ("2024-01-02", "AAPL"),
+        ("2024-01-02", "MSFT"),
+    ],
+    names=["datetime", "instrument"]
 )
 
 df = pd.DataFrame(
-{
-"close":[100,200,101,202],
-"volume":[1000,1500,1200,1800]
-},
-index=index
+    {
+        "close": [100, 200, 101, 202],
+        "volume": [1000, 1500, 1200, 1800]
+    },
+    index=index
 )
 ```
 
 Result:
 
 ```
-                        close   volume
-datetime   instrument
-2024-01-01 AAPL           100     1000
-           MSFT           200     1500
-2024-01-02 AAPL           101     1200
-           MSFT           202     1800
+                        close  volume
+datetime   instrument                
+2024-01-01 AAPL            100    1000
+           MSFT            200    1500
+2024-01-02 AAPL            101    1200
+           MSFT            202    1800
 ```
 
 Index levels:
+- level 0 → datetime
+- level 1 → instrument
 
-```
-level 0 → datetime
-level 1 → instrument
-```
+## Selector Types
 
----
-
-# Selector
-
-`selector` specifies **which index values to select**.
-
-Possible types:
-
-```
-pd.Timestamp
-slice
-str
-list
-pd.Index
-pd.MultiIndex
-```
+`selector` specifies which index values to select. Possible types:
+- `pd.Timestamp`
+- `slice`
+- `str`
+- `list`
+- `pd.Index`
+- `pd.MultiIndex`
 
 Examples:
-
-```
+```python
 selector = "2024-01-01"
 selector = "AAPL"
-selector = slice("2024-01-01","2024-01-02")
-selector = ["AAPL","MSFT"]
+selector = slice("2024-01-01", "2024-01-02")
+selector = ["AAPL", "MSFT"]
 ```
 
----
-
-# Case 1: selector is MultiIndex
+## Case 1: selector is MultiIndex
 
 ```python
 if level is None or isinstance(selector, pd.MultiIndex):
     return df.loc(axis=0)[selector]
 ```
 
-If the selector already contains **full index tuples**, no level inference is needed.
+If selector already contains full index tuples, no level inference is needed.
 
-Example:
-
-```
-selector =
-[
-("2024-01-01","AAPL"),
-("2024-01-02","MSFT")
+```python
+selector = [
+    ("2024-01-01", "AAPL"),
+    ("2024-01-02", "MSFT")
 ]
-```
-
-Selection:
-
-```
 df.loc[selector]
 ```
 
 Result:
 
 ```
-                        close volume
-datetime   instrument
-2024-01-01 AAPL           100   1000
-2024-01-02 MSFT           202   1800
+                        close  volume
+datetime   instrument                
+2024-01-01 AAPL            100    1000
+2024-01-02 MSFT            202    1800
 ```
 
----
-
-# Constructing `idx_slc`
+## Constructing `idx_slc`
 
 ```python
 idx_slc = (selector, slice(None))
 ```
 
-This creates a **tuple for MultiIndex slicing**.
+Creates a tuple for MultiIndex slicing.
 
-Example:
-
-```
-selector = "2024-01-01"
-```
-
-Then:
-
-```
-idx_slc = ("2024-01-01", slice(None))
-```
-
-Meaning:
-
-```
-(datetime="2024-01-01", instrument=all)
+Example with `selector = "2024-01-01"`:
+```python
+idx_slc = ("2024-01-01", slice(None))  # (datetime="2024-01-01", instrument=all)
 ```
 
 Equivalent to:
-
-```
+```python
 df.loc["2024-01-01", :]
 ```
 
 Result:
 
 ```
-           close volume
-instrument
-AAPL        100   1000
-MSFT        200   1500
+           close  volume
+instrument              
+AAPL          100    1000
+MSFT          200    1500
 ```
 
----
-
-# Level Adjustment
+## Level Adjustment
 
 ```python
 if get_level_index(df, level) == 1:
     idx_slc = idx_slc[1], idx_slc[0]
 ```
 
-If the selector targets **level 1**, the tuple must be swapped.
+If selector targets level 1 (instrument), the tuple must be swapped.
 
-Example:
+Example with `selector = "AAPL", level = "instrument"`:
 
-```
-selector = "AAPL"
-level = "instrument"
-```
-
-Initial slice:
-
-```
+Initial:
+```python
 idx_slc = ("AAPL", slice(None))
 ```
 
-But index order is:
-
-```
-(datetime, instrument)
-```
-
-So it becomes:
-
-```
+After swap (index order is datetime, instrument):
+```python
 idx_slc = (slice(None), "AAPL")
 ```
 
 Selection:
-
-```
+```python
 df.loc[:, "AAPL"]
 ```
 
 Result:
 
 ```
-                        close volume
-datetime   instrument
-2024-01-01 AAPL           100   1000
-2024-01-02 AAPL           101   1200
+                        close  volume
+datetime   instrument                
+2024-01-01 AAPL            100    1000
+2024-01-02 AAPL            101    1200
 ```
 
----
+## `pd.IndexSlice` Usage
 
-# `pd.IndexSlice`
+`pd.IndexSlice` simplifies MultiIndex slicing:
 
-`pd.IndexSlice` simplifies MultiIndex slicing.
-
-Example:
-
-```
+```python
 idx = pd.IndexSlice
-df.loc[idx["2024-01-01", :]]
+df.loc[idx["2024-01-01", :]]  # Equivalent to df.loc[("2024-01-01", slice(None))]
 ```
 
-Equivalent to:
-
-```
-df.loc[("2024-01-01", slice(None))]
-```
-
----
-
-# `fetch_orig` Behavior
-
-Key logic:
+## `fetch_orig` Behavior
 
 ```python
 if fetch_orig:
@@ -368,74 +294,19 @@ if fetch_orig:
         return df
 ```
 
-Meaning:
+If the slice selects **all data**, return the **original DataFrame** without copying.
 
-If the slice selects **all data**, return the **original DataFrame**.
-
-Example:
-
-```
-idx_slc = (slice(None), slice(None))
+Example with no filtering:
+```python
+idx_slc = (slice(None), slice(None))  # select everything
+# Returns df directly instead of df.loc[:, :]
 ```
 
-This means:
+## Why This Optimization Matters
 
-```
-select everything
-```
+Qlib datasets can be very large:
+- 3000+ stocks
+- 10+ years of data
+- 10,000,000+ rows
 
-Instead of executing:
-
-```
-df.loc[:, :]
-```
-
-which creates a **new DataFrame**, the function returns:
-
-```
-df
-```
-
-directly.
-
----
-
-# Why This Optimization Exists
-
-Qlib datasets can be very large.
-
-Typical scale:
-
-```
-3000 stocks
-×
-10 years
-```
-
-Rows may exceed:
-
-```
-10,000,000+
-```
-
-If every operation performs:
-
-```
-df.loc[:, :]
-```
-
-pandas creates a **new DataFrame copy**, which wastes:
-
-* memory
-* CPU time
-
-Therefore:
-
-```
-fetch_orig=True
-```
-
-avoids unnecessary copying by returning the original DataFrame when no filtering is applied.
-
-```
-```
+Without this optimization, every `df.loc[:, :]` creates an expensive DataFrame copy, causing memory and performance issues. `fetch_orig=True` avoids unnecessary copying when no filtering is applied.
