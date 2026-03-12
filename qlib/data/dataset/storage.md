@@ -1,4 +1,4 @@
-# `HashingStockStorage` Time Handling
+# `HashingStockStorage` 
 
 **Source Code**: https://github.com/microsoft/qlib/blob/main/qlib/data/dataset/storage.py#L88
 
