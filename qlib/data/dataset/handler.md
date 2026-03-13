@@ -6,6 +6,7 @@ This document explains the **data processing pipeline of `DataHandlerLP`** in Ql
 - Why training uses `learn_df`
 - Why prediction/backtesting uses `infer_df`
 - The exact processor execution order
+- **When to call `model.fit` and `model.predict`**
 - A simplified example with real data
 
 Framework: **Qlib (Microsoft Quantitative Investment Platform)**
@@ -23,7 +24,7 @@ The design follows one fundamental principle:
 | Stage | Dataset | Label Processing | Purpose | If Reversed |
 |-------|---------|------------------|---------|-------------|
 | Model Training (`model.fit`) | `learn_df` | Heavy processing (DropnaLabel, RankNorm, Clip, etc.) | Stabilize training and improve label distribution | Training becomes unstable; model learns noise |
-| Prediction / Backtesting | `infer_df` | Minimal processing (usually only Fillna) | Simulate real trading conditions and avoid look-ahead bias | Backtest results become inflated and unrealistic |
+| Prediction / Backtesting (`model.predict`) | `infer_df` | Minimal processing (usually only Fillna) | Simulate real trading conditions and avoid look-ahead bias | Backtest results become inflated and unrealistic |
 
 ### Key Idea
 - **Training**: labels can be aggressively cleaned to improve learning
@@ -44,64 +45,119 @@ _shared_df
     ↓
 infer_processors
     ↓
-_infer
+_infer  ←  Used for prediction/backtesting
     ↓
 learn_processors
     ↓
-_learn
+_learn  ←  Used for training
 ```
 
 **Important relationship**: `learn = infer + additional processors`
 
 ---
 
-## 3. Pipeline Structure (Conceptual)
+## 3. Complete Training & Prediction Workflow
+
+### Time Series Perspective (Rolling Window)
 
 ```
-(self._data)
-    │
-    ▼
-[shared_processors]
-    │
-    ▼
-(_shared_df)
-    │
-    ├─[infer_processors]──► (_infer)
-    │
-    └─[infer_processors]──► (_infer_temp)
-                             │
-                             ▼
-                      [learn_processors]
-                             │
-                             ▼
-                          (_learn)
+Training Period (2020)              Prediction Period (2021)
+      |                                    |
+      ▼                                    ▼
+learn_df_2020                        infer_df_2021
+(model.fit)                     →   (model.predict)
+      |                                    |
+      ▼                                    ▼
+   Model_2020  ───────────────────→  Predictions_2021
+                                          |
+                                          ▼
+                                   Evaluate with actual labels
+                                   (when they become available)
 ```
 
-### Processor Roles
+### Code Example
 
-#### `shared_processors`
-Applied to all datasets. Typical tasks:
-- Feature cleaning
-- Normalization
-- Feature filling
+```python
+# ==================== TRAINING PHASE ====================
+# Use 2020 data to train the model
+train_data = dataset.prepare(
+    segments="train",           # e.g., ("2020-01-01", "2020-12-31")
+    data_key="learn"             # Use learn_df for training
+)
 
-**Examples**: `DropnaFeature`, `RobustZScoreNorm`, `Fillna`
+# train_data contains:
+# - Features processed by shared_processors + infer_processors + learn_processors
+# - Labels are clean (no NaN, normalized)
+X_train = train_data['feature']
+y_train = train_data['label']
 
-#### `infer_processors`
-Used to produce **prediction/backtest data**. Rules:
-- Do not modify labels in ways that require future information
-- Avoid removing samples based on label values
+# Train the model
+model.fit(X_train, y_train)      # ← model.fit uses learn_df
 
-**Typical operations**: `Fillna`, feature normalization
+# ==================== PREDICTION PHASE ====================
+# Use 2021 data to make predictions
+test_data = dataset.prepare(
+    segments="test",             # e.g., ("2021-01-01", "2021-12-31")
+    data_key="infer"              # Use infer_df for prediction (default)
+)
 
-#### `learn_processors`
-Executed **after `infer_processors`**, based on `_infer`. Used only for training.
+# test_data contains:
+# - Features processed by shared_processors + infer_processors
+# - Labels are raw (may have NaN/extremes) - used only for evaluation
+X_test = test_data['feature']
+y_test = test_data['label']      # Actual labels for evaluation
 
-**Typical operations**: `DropnaLabel`, `CSRankNorm(label)`, label clipping
+# Make predictions
+predictions = model.predict(X_test)  # ← model.predict uses infer_df
+
+# Evaluate (after true labels are known)
+from sklearn.metrics import mean_squared_error
+mse = mean_squared_error(y_test, predictions)
+```
 
 ---
 
-## 4. Example with Real Data
+## 4. Rolling Window Example (Realistic Backtesting)
+
+```python
+# Configuration
+handler = DataHandlerLP(...)
+dataset = DatasetH(handler=handler, segments={
+    'train': ('2020-01-01', '2020-12-31'),
+    'valid': ('2021-01-01', '2021-06-30'),
+    'test': ('2021-07-01', '2021-12-31')
+})
+
+# ===== STEP 1: Train on 2020 data =====
+X_train = dataset.prepare('train', data_key='learn')['feature']
+y_train = dataset.prepare('train', data_key='learn')['label']
+model.fit(X_train, y_train)  # ← model.fit with learn_df
+
+# ===== STEP 2: Validate on H1 2021 =====
+X_valid = dataset.prepare('valid', data_key='infer')['feature']
+y_valid = dataset.prepare('valid', data_key='infer')['label']
+pred_valid = model.predict(X_valid)  # ← model.predict with infer_df
+print("Validation MSE:", mean_squared_error(y_valid, pred_valid))
+
+# ===== STEP 3: Retrain on more data =====
+# Use 2020 + H1 2021 for training
+dataset.config(segments={
+    'train': ('2020-01-01', '2021-06-30')
+})
+X_train2 = dataset.prepare('train', data_key='learn')['feature']
+y_train2 = dataset.prepare('train', data_key='learn')['label']
+model.fit(X_train2, y_train2)  # Retrain with more data
+
+# ===== STEP 4: Test on H2 2021 =====
+X_test = dataset.prepare('test', data_key='infer')['feature']
+y_test = dataset.prepare('test', data_key='infer')['label']
+pred_test = model.predict(X_test)
+print("Test MSE:", mean_squared_error(y_test, pred_test))
+```
+
+---
+
+## 5. Example with Real Data
 
 Assume the raw dataset (`self._data`) contains 3 stocks across 2 days.
 
@@ -134,7 +190,7 @@ Output: `_shared_df`
 
 Example: `Fillna(label = 0)`
 
-**Result**: `self._infer`
+**Result**: `self._infer` (used for prediction)
 
 | datetime   | instrument | $close | RSI10 | LABEL0 |
 |------------|-----------|--------|-------|--------|
@@ -149,7 +205,7 @@ Example: `Fillna(label = 0)`
 - Extreme values remain
 - No rows removed
 
-**Usage**: Prediction, Backtesting, Evaluation
+**When to use**: `model.predict(X_test)` uses this data's features
 
 ---
 
@@ -157,15 +213,7 @@ Example: `Fillna(label = 0)`
 
 Example: `DropnaLabel`, `CSZScoreNorm(label)`
 
-#### 1. DropnaLabel
-Removes rows where the original label was missing.
-
-**Removed row**: `2023-01-03 SH600519`
-
-#### 2. Cross-Sectional Z-Score on Labels
-Labels normalized across instruments on the same date.
-
-**Result**: `self._learn`
+**Result**: `self._learn` (used for training)
 
 | datetime   | instrument | $close | RSI10 | LABEL0 |
 |------------|-----------|--------|-------|--------|
@@ -179,79 +227,49 @@ Labels normalized across instruments on the same date.
 - No missing labels
 - Stable distribution
 
-**Usage**: Model training
+**When to use**: `model.fit(X_train, y_train)` uses this data's features and labels
 
 ---
 
-## 5. Why `infer` Must Be Generated First
-
-Many label processors require **future or cross-sectional information**.
-
-**Example**: `CSRankNorm(label)` requires all labels for the same day. If applied during inference, future returns would be implicitly used, introducing **look-ahead bias**.
-
-Therefore the correct order is:
-
-```
-shared_processors → infer_processors → _infer → learn_processors → _learn
-```
-
----
-
-## 6. Alternative Mode: `independent`
-
-If configured as `process_type = "independent"`, the pipeline becomes:
-
-```
-_shared_df
-    ├─ infer_processors → _infer
-    └─ learn_processors → _learn
-```
-
-Both pipelines are independent. However, most official handlers (such as `Alpha158` and `Alpha360`) use the default `append` mode.
-
----
-
-## 7. Core Implementation Logic
-
-Simplified implementation from `handler.py`:
+## 6. Training vs Prediction: Code Comparison
 
 ```python
-_shared_df = self._run_proc_l(_shared_df, self.shared_processors, ...)
+# ===== TRAINING =====
+# Get learn_df (heavily processed labels)
+train_learn = dataset.prepare("train", data_key="learn")
+model.fit(
+    train_learn['feature'],  # X: processed features
+    train_learn['label']     # y: clean, normalized labels
+)
 
-_infer_df = self._run_proc_l(_infer_df, self.infer_processors, ...)
-self._infer = _infer_df
+# ===== PREDICTION =====
+# Get infer_df (minimally processed labels)
+test_infer = dataset.prepare("test", data_key="infer")  # default
+predictions = model.predict(
+    test_infer['feature']     # X: same feature processing as training
+)
 
-_learn_df = _infer_df.copy()
-_learn_df = self._run_proc_l(_learn_df, self.learn_processors, ...)
-self._learn = _learn_df
+# Evaluate (labels in infer_df are raw, used only for evaluation)
+true_labels = test_infer['label']  # May contain NaN/extremes
+mse = mean_squared_error(true_labels, predictions)
 ```
-
-**Key insight**: `_learn` is built on top of `_infer`
 
 ---
 
-## 8. Dataset Usage
+## 7. Summary: When to Use What
 
-| Purpose | Code |
-|---------|------|
-| Training | `dataset.prepare(..., data_key="learn")` |
-| Prediction / Backtesting | `dataset.prepare(..., data_key="infer")` (default) |
+| Step | What to Use | Data Key | Label State | Code |
+|------|-------------|----------|-------------|------|
+| **Training** | `learn_df` | `"learn"` | Clean, normalized, no NaN | `model.fit(X_learn, y_learn)` |
+| **Validation** | `infer_df` | `"infer"` | Raw (may have NaN/extremes) | `model.predict(X_infer)` |
+| **Test/Backtest** | `infer_df` | `"infer"` | Raw (may have NaN/extremes) | `model.predict(X_infer)` |
+| **Live Prediction** | `infer_df` | `"infer"` | Labels not available yet | `model.predict(X_infer)` |
 
----
-
-## 9. Summary
-
-The core design of `DataHandlerLP`:
-
-```
-shared_processors → infer_processors → _infer → learn_processors → _learn
-```
-
-**Key principle**:
-- Training data may aggressively clean labels
-- Prediction data must remain realistic
+### Golden Rule
+- **`model.fit`** → always use **`data_key="learn"`**
+- **`model.predict`** → always use **`data_key="infer"`** (default)
 
 This separation ensures that:
-- Training remains stable
-- Backtesting remains unbiased
-- The pipeline avoids look-ahead bias
+- Training remains stable with clean labels
+- Predictions are realistic and unbiased
+- Backtest results are trustworthy
