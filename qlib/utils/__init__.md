@@ -568,3 +568,254 @@ _index = 5  # Out of bounds (needs handling)
 
 - **Left alignment**: To move left, use `bisect_right` to find the right boundary, then step back one position
 - **Right alignment**: To move right, use `bisect_left` to directly find the starting point on the right
+
+# Qlib Expression Parsing: From User-Friendly Syntax to Executable Code
+
+**Reference**: [https://github.com/microsoft/qlib/blob/main/qlib/utils/__init__.py#L277](https://github.com/microsoft/qlib/blob/main/qlib/utils/__init__.py#L277)
+
+This document explains how Qlib transforms user-friendly expression strings (like `$close`, `$$roe_q`, `Mean($close,5)`) into executable Python code.
+
+## Overview
+
+The parsing system converts three types of patterns:
+
+| Pattern | Description | Example | Converted To |
+|---------|-------------|---------|--------------|
+| `$$name` | PIT (Point-in-Time) features | `$$roe_q` | `PFeature("roe_q")` |
+| `$name` | Basic features | `$close` | `Feature("close")` |
+| `func(...)` | Function calls | `Mean($close,5)` | `Operators.Mean(...)` |
+
+## Code Structure
+
+```python
+(
+    rf"\$\$([\w{chinese_punctuation_regex}]+)",  # Pattern 1: PIT features ($$)
+    r'PFeature("\1")',                            # Replacement 1
+),
+(
+    rf"\$([\w{chinese_punctuation_regex}]+)",    # Pattern 2: Basic features ($)
+    r'Feature("\1")',                             # Replacement 2
+),
+(
+    r"(\w+\s*)\(",                                 # Pattern 3: Function calls
+    r"Operators.\1(",                              # Replacement 3
+),
+```
+
+Each is a tuple containing:
+- **Pattern**: Regular expression to match
+- **Replacement**: String to replace with
+
+---
+
+## Pattern 1: PIT Features ($$)
+
+### Pattern Details
+
+```python
+rf"\$\$([\w{chinese_punctuation_regex}]+)"
+```
+
+**Breakdown:**
+
+| Part | Description | Example Match |
+|------|-------------|---------------|
+| `r` | Raw string (prevents escape) | - |
+| `f` | f-string (allows variable embedding) | embeds `chinese_punctuation_regex` |
+| `\$\$` | Matches two dollar signs | `$$` |
+| `(` | Start capture group | Captures feature name |
+| `[\w{chinese_punctuation_regex}]` | Character class | Letters, digits, underscore, Chinese punctuation |
+| `+` | One or more times | Matches one or more characters |
+| `)` | End capture group | - |
+
+### Chinese Punctuation Support
+
+```python
+chinese_punctuation_regex = r"\u3001\uff1a\uff08\uff09"
+```
+
+This includes:
+- `\u3001` → `、` (Chinese comma/ideographic comma)
+- `\uff1a` → `：` (Fullwidth colon)
+- `\uff08` → `（` (Fullwidth left parenthesis)
+- `\uff09` → `）` (Fullwidth right parenthesis)
+
+### Expanded Regex
+
+```python
+r"\$\$([\w\u3001\uff1a\uff08\uff09]+)"
+```
+
+This matches:
+- Starting with `$$`
+- Followed by one or more of:
+  - `\w`: letters, digits, underscore
+  - `\u3001`: `、`
+  - `\uff1a`: `：`
+  - `\uff08`: `（`
+  - `\uff09`: `）`
+
+### Replacement Pattern
+
+```python
+r'PFeature("\1")'
+```
+
+| Part | Description |
+|------|-------------|
+| `r` | Raw string |
+| `PFeature` | PIT feature class name |
+| `"\1"` | References first capture group content |
+| `()` | Function call parentheses |
+
+### Example: PIT Feature with Chinese Punctuation
+
+```python
+# Input
+field = "$$资产负债率：最新_q"
+
+# Matching process:
+# "\$\$" matches "$$"
+# "([\w\u3001\uff1a\uff08\uff09]+)" captures "资产负债率：最新_q"
+#   ├─ "资产负债率" → \w
+#   ├─ "：" → \uff1a
+#   └─ "最新_q" → \w
+# Capture group \1 = "资产负债率：最新_q"
+
+# Replacement: 'PFeature("\1")' → 'PFeature("资产负债率：最新_q")'
+
+# Result
+field = 'PFeature("资产负债率：最新_q")'
+```
+
+---
+
+## Pattern 2: Basic Features ($)
+
+### Pattern Details
+
+```python
+rf"\$([\w{chinese_punctuation_regex}]+)"
+```
+
+**Breakdown:**
+
+| Part | Description | Example Match |
+|------|-------------|---------------|
+| `\$` | Matches single dollar sign | `$` |
+| `(` | Start capture group | Captures feature name |
+| `[\w{chinese_punctuation_regex}]` | Character class | Letters, digits, underscore, Chinese punctuation |
+| `+` | One or more times | Matches one or more characters |
+| `)` | End capture group | - |
+
+### Replacement Pattern
+
+```python
+r'Feature("\1")'
+```
+
+- `Feature`: Basic feature class name
+- `"\1"`: References first capture group content
+
+### Example: Basic Feature with Chinese Punctuation
+
+```python
+# Input
+field = "$资产负债率：最新"
+
+# Captures "资产负债率：最新" → replaced with 'Feature("资产负债率：最新")'
+# Result
+field = 'Feature("资产负债率：最新")'
+```
+
+---
+
+## Pattern 3: Function Calls
+
+### Pattern Details
+
+```python
+r"(\w+\s*)\("
+```
+
+**Breakdown:**
+
+| Part | Description | Example Match |
+|------|-------------|---------------|
+| `(` | Start capture group | Captures function name |
+| `\w+` | One or more word characters | `Mean`, `Ref`, `Sum` |
+| `\s*` | Zero or more spaces | Allows spaces after function name |
+| `)` | End capture group | - |
+| `\(` | Matches left parenthesis | `(` |
+
+### Replacement Pattern
+
+```python
+r"Operators.\1("
+```
+
+- `Operators`: Operator class name (contains all built-in functions)
+- `.\1`: Dot plus captured function name
+- `(`: Preserves left parenthesis
+
+### Example: Function Call
+
+```python
+# Assuming previous replacements have been applied
+field = "Mean(Feature(\"close\"), 5)"
+
+# Matching process:
+# "(\w+\s*)" captures "Mean"
+# "\(" matches "("
+# Capture group \1 = "Mean"
+
+# Replacement: 'Operators.\1(' → 'Operators.Mean('
+
+# Result
+field = 'Operators.Mean(Feature("close"), 5)'
+```
+
+---
+
+## Complete Transformation Example
+
+### Input
+```python
+expr = "Mean($close, 5) > $open and $$roe_q > 0.1"
+```
+
+### Step 1: PIT Features ($$)
+```python
+# After pattern 1
+expr = "Mean($close, 5) > $open and PFeature(\"roe_q\") > 0.1"
+```
+
+### Step 2: Basic Features ($)
+```python
+# After pattern 2
+expr = "Mean(Feature(\"close\"), 5) > Feature(\"open\") and PFeature(\"roe_q\") > 0.1"
+```
+
+### Step 3: Function Calls
+```python
+# After pattern 3
+expr = "Operators.Mean(Feature(\"close\"), 5) > Feature(\"open\") and PFeature(\"roe_q\") > 0.1"
+```
+
+### Final Executable Expression
+```python
+# This can now be evaluated to create expression objects
+expression = eval(expr)
+# expression is now a callable object that can load data
+data = expression.load("SH600000", start_index, end_index, "day")
+```
+
+## Summary
+
+The parsing system transforms:
+
+| Original Syntax | Converted To | Purpose |
+|-----------------|--------------|---------|
+| `$$feature` | `PFeature("feature")` | PIT (point-in-time) data |
+| `$feature` | `Feature("feature")` | Basic feature data |
+| `func(...)` | `Operators.func(...)` | Function calls |
