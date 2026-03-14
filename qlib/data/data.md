@@ -97,9 +97,9 @@ D._provider.features(...)
 
 `BaseProvider` in the annotation is just a type hint for better developer experience (autocomplete, error checking) and has no runtime effect. The real object is a `Wrapper`, and the actual `BaseProvider` functionality lives in the delegated `_provider` instance.
 
-# Understanding `expr.load()` in Qlib: A Deep Dive into Expression Evaluation
+# Understanding `expression.load` in Qlib: A Deep Dive into Expression Evaluation
 
-This document explains the execution flow of `expr.load()` in Qlib, using the expression `Mean($close, 5) > $open` as an example.
+This document explains the execution flow of `expression.load` in Qlib, using the expression `Mean($close, 5) > $open` as an example.
 
 ## Reference Implementation
 
@@ -128,10 +128,10 @@ expr = Gt(                # Root node: Greater Than operator
 )
 ```
 
-## 2. Calling `expr.load()`
+## 2. Calling `expression.load`
 
 ```python
-series = expr.load(
+series = expression.load
     instrument="SH600000",
     start_index=100,
     end_index=200,
