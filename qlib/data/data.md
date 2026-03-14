@@ -108,6 +108,7 @@ The code discussed in this document can be found in the Qlib repository:
 - [qlib/data/data.py#L844](https://github.com/microsoft/qlib/blob/main/qlib/data/data.py#L844) - expression = self.get_expression_instance(field)
 - [qlib/data/data.py#L859](https://github.com/microsoft/qlib/blob/main/qlib/data/data.py#L859) - series = expression.load(instrument, query_start, query_end, freq)
 - [qlib/data/data.py#L397](https://github.com/microsoft/qlib/blob/main/qlib/data/data.py#L397) - expression = eval(parse_field(field))
+- [qlib/data/data.py#L923](https://github.com/microsoft/qlib/blob/main/qlib/data/data.py#L923) - data = self.dataset_processor(instruments_d, column_names, start_time, end_time, freq, inst_processors=inst_processors)
 
 ## 1. Building the Expression Object Tree
 
