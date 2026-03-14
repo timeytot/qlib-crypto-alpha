@@ -96,3 +96,154 @@ D._provider.features(...)
 ## Conclusion in One Sentence
 
 `BaseProvider` in the annotation is just a type hint for better developer experience (autocomplete, error checking) and has no runtime effect. The real object is a `Wrapper`, and the actual `BaseProvider` functionality lives in the delegated `_provider` instance.
+
+# Understanding `expr.load()` in Qlib: A Deep Dive into Expression Evaluation
+
+This document explains the execution flow of `expr.load()` in Qlib, using the expression `Mean($close, 5) > $open` as an example.
+
+## Reference Implementation
+
+The code discussed in this document can be found in the Qlib repository:
+- [qlib/data/data.py#L615](https://github.com/microsoft/qlib/blob/main/qlib/data/data.py#L615) - obj[field] = ExpressionD.expression(inst, field, start_time, end_time, freq)
+- [qlib/data/data.py#L844](https://github.com/microsoft/qlib/blob/main/qlib/data/data.py#L844) - expression = self.get_expression_instance(field)
+- [qlib/data/data.py#L859](https://github.com/microsoft/qlib/blob/main/qlib/data/data.py#L859) - series = expression.load(instrument, query_start, query_end, freq)
+- [qlib/data/data.py#L397](https://github.com/microsoft/qlib/blob/main/qlib/data/data.py#L397) - expression = eval(parse_field(field))
+
+## 1. Building the Expression Object Tree
+
+First, the user input string is parsed and evaluated into an expression object tree:
+
+```python
+# User input
+field = "Mean($close, 5) > $open"
+
+# After eval(parse_field(field)), we get:
+expr = Gt(                # Root node: Greater Than operator
+    left=Mean(            # Left child: Mean operator
+        feature=Feature('close'),  # Leaf node: close price feature
+        N=5
+    ),
+    right=Feature('open') # Right child: open price feature
+)
+```
+
+## 2. Calling `expr.load()`
+
+```python
+series = expr.load(
+    instrument="SH600000",
+    start_index=100,
+    end_index=200,
+    freq="day"
+)
+```
+
+## 3. Execution Flow (Based on Class Hierarchy)
+
+### Step 1: `Gt._load_internal()` - Located in `Gt` Class
+
+```python
+# Gt inherits from NpPairOperator
+class Gt(NpPairOperator):
+    def __init__(self, feature_left, feature_right):
+        super(Gt, self).__init__(feature_left, feature_right, "greater")
+
+# NpPairOperator's _load_internal
+def _load_internal(self, instrument, start_index, end_index, *args):
+    # 1. Load left operand
+    if isinstance(self.feature_left, Expression):
+        series_left = self.feature_left.load(instrument, start_index, end_index, *args)
+        # Here self.feature_left is a Mean object
+    
+    # 2. Load right operand
+    if isinstance(self.feature_right, Expression):
+        series_right = self.feature_right.load(instrument, start_index, end_index, *args)
+        # Here self.feature_right is a Feature('open') object
+    
+    # 3. Perform greater-than comparison
+    res = np.greater(series_left, series_right)
+    return res
+```
+
+### Step 2: `Mean._load_internal()` - Located in `Mean` Class
+
+```python
+# Mean inherits from Rolling
+class Mean(Rolling):
+    def __init__(self, feature, N):
+        super(Mean, self).__init__(feature, N, "mean")
+
+# Rolling class's _load_internal
+def _load_internal(self, instrument, start_index, end_index, *args):
+    # 1. Load underlying feature data
+    series = self.feature.load(instrument, start_index, end_index, *args)
+    # Here self.feature is a Feature('close') object
+    
+    # 2. Calculate rolling mean
+    if isinstance(self.N, int) and self.N == 0:
+        series = series.expanding(min_periods=1).mean()
+    elif isinstance(self.N, float) and 0 < self.N < 1:
+        series = series.ewm(alpha=self.N, min_periods=1).mean()
+    else:
+        series = series.rolling(self.N, min_periods=1).mean()
+        # self.N = 5, so calculate 5-day moving average
+    
+    return series
+```
+
+### Step 3: `Feature._load_internal()` - Located in `Feature` Class
+
+```python
+# Feature inherits from Expression
+class Feature(Expression):
+    def _load_internal(self, instrument, start_index, end_index, freq):
+        # Call the data provider
+        return FeatureD.feature(
+            instrument,     # "SH600000"
+            str(self),      # "$close"
+            start_index,    # 100 (but note Mean may require extension)
+            end_index,      # 200
+            freq            # "day"
+        )
+```
+
+## 4. Complete Recursive Call Chain
+
+```
+Gt.load(100,200)
+    │
+    ├─ Gt._load_internal(100,200)
+    │   │
+    │   ├─ Mean.load(100,200)
+    │   │   │
+    │   │   ├─ Mean._load_internal(100,200)
+    │   │   │   │
+    │   │   │   ├─ Feature('close').load(96,200)  # Mean needs 4 previous days
+    │   │   │   │   │
+    │   │   │   │   └─ FeatureD.feature(96,200)   # Read close price data
+    │   │   │   │
+    │   │   │   └─ rolling(window=5).mean()       # Calculate 5-day MA
+    │   │   │
+    │   │   └─ Return Mean result (100-200)
+    │   │
+    │   ├─ Feature('open').load(100,200)
+    │   │   │
+    │   │   └─ FeatureD.feature(100,200)          # Read open price data
+    │   │
+    │   └─ np.greater()                            # Compare values
+    │
+    └─ Return boolean series (100-200)
+```
+
+## Final Returned Data
+
+```python
+# Example result
+# Date        Mean($close,5) > $open
+# 2020-01-01  True    # 5-day MA > open price
+# 2020-01-02  False   # 5-day MA <= open price
+# 2020-01-03  True
+# ...
+```
+
+This execution flow demonstrates how Qlib decomposes complex expression calculations into individual operator implementations through **recursive calls** and **object-oriented polymorphism**. Each operator class implements its own `_load_internal` method, and the expression tree is evaluated recursively from the root down to the leaf nodes.
