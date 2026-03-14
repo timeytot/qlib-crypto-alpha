@@ -131,12 +131,11 @@ expr = Gt(                # Root node: Greater Than operator
 ## 2. Calling `expression.load`
 
 ```python
-series = expression.load
+series = expression.load(
     instrument="SH600000",
     start_index=100,
     end_index=200,
-    freq="day"
-)
+    freq="day")
 ```
 
 ## 3. Execution Flow (Based on Class Hierarchy)
