@@ -246,3 +246,167 @@ _all_filter_series = {
 4. **Time Alignment**: Automatically aligns to calendar to ensure data consistency
 5. **Time Span Filtering**: Only retains data within each instrument's valid time periods
 6. **Return Format**: Dictionary `{instrument_code: boolean_series}` indicating whether each instrument satisfies the filter condition on each day
+
+Based on the Qlib source code you provided, here is a clear, English explanation of the filtering process, formatted for your repository notes.
+
+---
+
+# Understanding the Core Filtering Logic in `SeriesDFilter`
+
+This document explains the step-by-step process of how a dynamic filter (like `ExpressionDFilter`) filters instruments based on their available time spans and a conditional rule.
+
+## Reference Implementation
+
+The core logic for this process is implemented in the `filter_main` method of the `SeriesDFilter` class:
+- [qlib/data/filter.py#L216](https://github.com/microsoft/qlib/blob/main/qlib/data/filter.py#L216) - `SeriesDFilter.filter_main()`
+
+## The Goal: Finding the Time Intersection
+
+The fundamental operation is an **intersection** between two time-based boolean series:
+1.  **`timestamp_series`**: When is the instrument **available** (True) or not (False)?
+2.  **`filter_series`**: When does the instrument **satisfy the filter rule** (True) or not (False)?
+
+The final result is the set of time points where **both are True**.
+
+## Step-by-Step Walkthrough with an Example
+
+Let's use a concrete example with a stock `SH600000` and a filter rule `$close > 100`.
+
+### 1. Initial Data: Instrument Availability (`timestamp`)
+
+The input `instruments` dictionary tells us when `SH600000` is available in the market.
+
+```python
+# Original instrument data
+instruments = {
+    'SH600000': [
+        ('2020-01-01', '2020-03-31'),   # Available in Q1
+        ('2020-06-01', '2020-12-31')    # Available again in H2
+    ],
+    # ... other instruments
+}
+```
+
+### 2. Step 1: Convert Availability to a Boolean Series (`_toSeries`)
+
+The `_toSeries` method converts the list of time `tuple`s into a daily boolean `pd.Series` for a given calendar (`_all_calendar`).
+
+```python
+# The full calendar for the entire analysis period
+_all_calendar = pd.date_range('2020-01-01', '2020-12-31', freq='D')
+
+# Inside the loop for 'SH600000':
+_timestamp_series = self._toSeries(_all_calendar, timestamp)
+
+# _timestamp_series now looks like this:
+# 2020-01-01     True   (Within first period)
+# 2020-01-02     True
+# ...
+# 2020-03-31     True
+# 2020-04-01     False  (Outside both periods)
+# ...
+# 2020-05-31     False
+# 2020-06-01     True   (Within second period)
+# ...
+# 2020-12-31     True
+# Freq: D, dtype: bool
+```
+
+### 3. Step 2: Get the Filter Rule's Boolean Series (`_getFilterSeries`)
+
+The `_getFilterSeries` method (implemented by a subclass like `ExpressionDFilter`) calculates the filter rule for every day in the filter's time range (`_filter_calendar`). It returns a dictionary where the key is the instrument and the value is its filter series.
+
+```python
+# The filter's time range (intersection of user's request and data availability)
+_filter_calendar = pd.date_range('2020-02-01', '2020-11-30', freq='D')
+
+# This is calculated by ExpressionDFilter._getFilterSeries()
+_all_filter_series = {
+    'SH600000': pd.Series(  # The result for SH600000
+        index=['2020-02-01', ..., '2020-11-30'],
+        data=[False, True, False, ...]  # True on days when $close > 100
+    ),
+    # ... filter series for other instruments
+}
+
+# Inside the loop for 'SH600000', we get its specific filter series:
+_filter_series = _all_filter_series['SH600000']
+
+# _filter_series looks like this:
+# 2020-02-01    False  (close <= 100)
+# 2020-02-02     True  (close > 100)
+# 2020-02-03    False
+# ...
+# 2020-11-30    False
+# Freq: D, dtype: bool
+```
+
+### 4. Step 3: Perform the Intersection (`_filterSeries`)
+
+This is the core filtering step. The `_filterSeries` method performs an **element-wise logical AND** between the availability series and the filter rule series.
+
+```python
+# Before the operation
+# _timestamp_series (Availability): [True, True, True, False, ...]
+# _filter_series (Rule Met):        [False, True, False, True, ...]
+
+_timestamp_series = self._filterSeries(_timestamp_series, _filter_series)
+
+# After the operation: Availability & Rule Met
+# Result: [False, True, False, False, ...]
+
+# Visualizing the AND operation:
+# Day         Availability    Rule Met     Result (Kept?)
+# 2020-02-01  True         &  False     = False -> Discarded
+# 2020-02-02  True         &  True      = True  -> Kept ✅
+# 2020-02-03  True         &  False     = False -> Discarded
+# 2020-04-01  False        &  (N/A)*    = False -> Discarded (outside filter range)
+# *The operation is only performed within the _filter_calendar range.
+```
+
+### 5. Step 4: Convert the Boolean Series Back to Time Periods (`_toTimestamp`)
+
+Finally, `_toTimestamp` converts the filtered boolean series back into the standard list-of-tuples format. It finds consecutive runs of `True` values and records their start and end dates.
+
+```python
+# The resulting boolean series after the AND operation:
+# 2020-02-01    False
+# 2020-02-02    True  <-- Start of a period
+# 2020-02-03    True
+# 2020-02-04    True
+# 2020-02-05    False <-- End of period
+# ... and so on.
+
+_timestamp = self._toTimestamp(_timestamp_series)
+
+# _timestamp becomes:
+[
+    ('2020-02-02', '2020-02-04'),  # Only these days survived the filter
+    # ... possibly other periods later in the year
+]
+```
+
+## Summary Diagram
+
+The entire flow for a single instrument can be visualized like this:
+
+```
+Original Available Periods:
+  [2020-01-01 to 2020-03-31]  and  [2020-06-01 to 2020-12-31]
+              |                                              |
+              |  `_toSeries()`                               |  `_toSeries()`
+              v                                              v
+Availability Series (Full Year):  [True, True, ..., False, ..., True, ...]
+                                   ^                          ^
+                                   |                          |
+                          Filter Range Applied (`_filterSeries` & `_filter_series`)
+                                   |                          |
+                                   v                          v
+Filtered Boolean Series:       [False, True, True, False, ..., False]
+                                               |
+                                               | `_toTimestamp()`
+                                               v
+Final Kept Periods:                       [('2020-02-02', '2020-02-04'), ...]
+```
+
+This process ensures that an instrument is only considered "active" in the output during the specific days when it was **both available in the market** and **satisfied the user's filter condition**.
