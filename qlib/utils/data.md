@@ -120,6 +120,10 @@ new_config["signal"].learning_rate = 0.001
 new_config["signal"] = copy.deepcopy(some_expensive_model)  # explicit deep copy if needed
 ```
 
+看起来你的Markdown渲染器不支持LaTeX数学公式。我来帮你转换成纯文本格式，保持内容不变：
+
+---
+
 # Robust Z-Score: Median Absolute Deviation (MAD) Explained
 
 > **Source Code**: [qlib/utils/data.py - robust_zscore function (Line 24)](https://github.com/microsoft/qlib/blob/main/qlib/utils/data.py#L24)
@@ -132,11 +136,9 @@ This document provides a clear, step-by-step explanation of the Median Absolute 
 The **Median Absolute Deviation (MAD)** is a robust measure of statistical dispersion. It is defined as the median of the absolute deviations from the data's median.
 
 ### Mathematical Definition
-For a univariate dataset \(X_1, X_2, ..., X_n\):
+For a univariate dataset X1, X2, ..., Xn:
 
-\[
-\text{MAD} = \operatorname{median}(|X_i - \operatorname{median}(X)|)
-\]
+MAD = median(|Xi - median(X)|)
 
 ### Intuitive Meaning
 MAD answers the question: **"What is the typical distance of a data point from the middle value?"**
@@ -163,8 +165,8 @@ Consider the data: `[1, 2, 3, 4, 10]`
 
 #### **Step 1: Center the Data** (`x = x - x.median()`)
 - **Purpose**: Shift the data so the median becomes 0. This makes the "center" reference point zero for easier deviation calculation.
-- **Mathematically**: \(X_{\text{centered}} = X - \operatorname{median}(X)\)
-- **Why?** The absolute deviation \(|X_i - \text{median}(X)|\) becomes \(|X_{\text{centered}}|\).
+- **Mathematically**: X_centered = X - median(X)
+- **Why?** The absolute deviation |Xi - median(X)| becomes |X_centered|.
 
 ```python
 data = pd.Series([1, 2, 3, 4, 10])
@@ -174,7 +176,7 @@ centered = data - median_val  # = [-2, -1, 0, 1, 7]
 
 #### **Step 2: Take Absolute Values** (`x.abs()`)
 - **Purpose**: Focus on the **magnitude** of deviation, ignoring direction (whether the point is above or below the median).
-- **Mathematically**: This implements the absolute part of \(|X_i - \text{median}(X)|\).
+- **Mathematically**: This implements the absolute part of |Xi - median(X)|.
 
 ```python
 abs_dev = centered.abs()  # = [2, 1, 0, 1, 7]
@@ -193,59 +195,43 @@ mad = pd.Series(abs_dev_sorted).median()  # = 1.0
 
 ## 3. Why Multiply by 1.4826? The Mathematical Derivation
 
-The magic number **1.4826** comes from making MAD a **consistent estimator** of the standard deviation (\(\sigma\)) for normally distributed data. Here's the derivation.
+The magic number **1.4826** comes from making MAD a **consistent estimator** of the standard deviation (σ) for normally distributed data. Here's the derivation.
 
 ### Step 1: The Probabilistic Definition of MAD
 For a symmetric distribution (like the normal distribution), the population MAD is defined such that **50% of the data falls within one MAD of the center**:
 
-\[
-P(|X - \mu| \leq \text{MAD}) = \frac{1}{2}
-\]
+P(|X - μ| ≤ MAD) = 1/2
 
 ### Step 2: Standardize the Variable
-Let \(Z = \frac{X - \mu}{\sigma} \sim N(0,1)\), a standard normal variable. The condition becomes:
+Let Z = (X - μ)/σ ~ N(0,1), a standard normal variable. The condition becomes:
 
-\[
-P\left(|Z| \leq \frac{\text{MAD}}{\sigma}\right) = \frac{1}{2}
-\]
+P(|Z| ≤ MAD/σ) = 1/2
 
 ### Step 3: Express Probability Using CDF
-The probability \(|Z| \leq a\) is the same as \(P(-a \leq Z \leq a)\). For a standard normal CDF \(\Phi\):
+The probability |Z| ≤ a is the same as P(-a ≤ Z ≤ a). For a standard normal CDF Φ:
 
-\[
-P(-a \leq Z \leq a) = \Phi(a) - \Phi(-a)
-\]
+P(-a ≤ Z ≤ a) = Φ(a) - Φ(-a)
 
-Using the symmetry property \(\Phi(-a) = 1 - \Phi(a)\), we get:
+Using the symmetry property Φ(-a) = 1 - Φ(a), we get:
 
-\[
-\Phi(a) - (1 - \Phi(a)) = 2\Phi(a) - 1
-\]
+Φ(a) - (1 - Φ(a)) = 2Φ(a) - 1
 
 ### Step 4: Set the Probability to 1/2
-We require \(2\Phi(a) - 1 = \frac{1}{2}\). Solving:
+We require 2Φ(a) - 1 = 1/2. Solving:
 
-\[
-2\Phi(a) = \frac{3}{2} \quad \Rightarrow \quad \Phi(a) = \frac{3}{4}
-\]
+2Φ(a) = 3/2  ⇒  Φ(a) = 3/4
 
 ### Step 5: Find the Quantile
-Thus, \(a = \Phi^{-1}(3/4)\). The 75th percentile of the standard normal distribution is:
+Thus, a = Φ⁻¹(3/4). The 75th percentile of the standard normal distribution is:
 
-\[
-\Phi^{-1}(0.75) \approx 0.67449
-\]
+Φ⁻¹(0.75) ≈ 0.67449
 
 ### Step 6: Relate a to MAD and σ
-Since \(a = \frac{\text{MAD}}{\sigma}\), we have:
+Since a = MAD/σ, we have:
 
-\[
-\frac{\text{MAD}}{\sigma} = 0.67449 \quad \Rightarrow \quad \text{MAD} = 0.67449 \cdot \sigma
-\]
+MAD/σ = 0.67449  ⇒  MAD = 0.67449 · σ
 
 ### Step 7: Solve for the Scale Factor k
-To estimate \(\sigma\) from MAD, we want \(\hat{\sigma} = k \cdot \text{MAD}\). Substituting:
+To estimate σ from MAD, we want σ̂ = k · MAD. Substituting:
 
-\[
-\sigma = \frac{\text{MAD}}{0.67449} \quad \Rightarrow \quad k = \frac{1}{0.67449} \approx 1.4826
-\]
+σ = MAD / 0.67449  ⇒  k = 1 / 0.67449 ≈ 1.4826
