@@ -273,3 +273,75 @@ This separation ensures that:
 - Training remains stable with clean labels
 - Predictions are realistic and unbiased
 - Backtest results are trustworthy
+
+Here's a cleaned-up, GitHub-flavored Markdown version optimized for quick review:
+
+---
+
+# Rolling Window Time Series Training
+
+---
+
+## Step 1: Initialization (Historical Data)
+
+Available historical data: `2020`, `2021`, `2022`
+
+---
+
+### 🔵 First Training
+- **Train:** `2020`
+- **Fit →** `model_2020`
+
+### 🔵 First Prediction (`2021`)
+- **Infer:** `2021`
+- **Predict using** `model_2020`
+
+---
+
+### 🟠 Second Training (Expanded)
+- **Train:** `2020 + 2021`
+- **Fit →** `model_2021`
+
+> ⚠️ Not only `2020` — all available data up to that point is used.
+
+### 🔵 Second Prediction (`2022`)
+- **Infer:** `2022`
+- **Predict using** `model_2021`
+
+---
+
+### 🟠 Third Training
+- **Train:** `2020 + 2021 + 2022`
+- **Fit →** `model_2022`
+
+---
+
+## 📊 Core Workflow
+
+```
+2020 → fit → model_2020
+        ↓
+2021 → predict
+        ↓
+     add to training
+        ↓
+2020+2021 → fit → model_2021
+        ↓
+2022 → predict
+        ↓
+     add to training
+        ↓
+2020+2021+2022 → fit → model_2022
+```
+
+---
+
+## ✅ Correct Rolling Training Logic
+
+| Step | Train Data | Predict |
+|------|------------|--------|
+| 1 | `2020` | `2021` |
+| 2 | `2020 + 2021` | `2022` |
+| 3 | `2020 + 2021 + 2022` | `2023` |
+
+---
