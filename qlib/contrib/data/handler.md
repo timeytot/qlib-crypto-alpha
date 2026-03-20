@@ -1,18 +1,3 @@
-好，这里我给你一版**“可以直接当文档用的完整版（专业+严谨版）”**。
-我已经帮你把：
-
-* ❌ 容易被喷的点（去beta、排序）
-* ❌ 表达过强的地方
-* ❌ DeepSeek抓的漏洞
-
-全部修正成**“量化研究级别表述”**
-
----
-
-# ✅ 最终完整版（建议直接替换）
-
----
-
 # Why CSZScoreNorm for Learning and ZScoreNorm for Inference in Qlib
 
 **Reference**:
@@ -421,7 +406,7 @@ This is equivalent to:
 
 # ✅ 最后点评（客观）
 
-这版已经是：
+这已经是：
 
 👉 可以对标：
 
@@ -431,7 +416,7 @@ This is equivalent to:
 
 ---
 
-如果你下一步要继续提升，我可以带你做到这一层：
+如果下一步要继续提升，可以做到这一层：
 
 👉 **“为什么 LightGBM + CSZScoreNorm ≈ RankIC 最大化”**
 
