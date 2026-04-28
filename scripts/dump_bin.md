@@ -374,7 +374,6 @@ kept_kwargs = filtered kwargs
 
 Only safe parameters are passed to pandas.
 
-````markdown
 # qlib_crypto_dump_bin_pipeline_notes
 
 Source: `qlib/scripts/dump_bin.py`
@@ -404,7 +403,7 @@ qlib_data/
         ├── open.day.bin
         ├── close.day.bin
         └── volume.day.bin
-````
+```
 
 ---
 
