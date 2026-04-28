@@ -374,27 +374,18 @@ kept_kwargs = filtered kwargs
 
 Only safe parameters are passed to pandas.
 
-建议文件名：
-
-```text
-qlib_crypto_dump_bin_pipeline_notes.md
-```
-
-下面是整理后的终极版，直接复制进 GitHub 的 `.md` 文件即可：
-
 ````markdown
-# Qlib Crypto 数据导入与 `dump_bin.py` 流程笔记
+# qlib_crypto_dump_bin_pipeline_notes
 
 Source: `qlib/scripts/dump_bin.py`
 
-本文记录对 Qlib 数据转换脚本 `dump_bin.py` 的理解，重点是：  
-如何把原始 crypto CSV / Parquet 数据转换成 Qlib 标准数据结构。
+This note summarizes the data conversion pipeline in Qlib's `dump_bin.py`.
 
----
+The key question is:
 
-## 1. Qlib 标准数据结构
+> How does Qlib convert raw crypto CSV / Parquet data into the standard Qlib data structure?
 
-目标输出目录结构：
+The final Qlib data directory looks like this:
 
 ```text
 qlib_data/
@@ -415,17 +406,9 @@ qlib_data/
         └── volume.day.bin
 ````
 
-三个核心目录：
-
-```text
-calendars/    = 全局交易日历
-instruments/  = 标的列表，以及每个标的的起止日期
-features/     = 每个 symbol 的字段数据，保存为 .bin 文件
-```
-
 ---
 
-## 2. dump 命令示例
+## 1. Example dump command
 
 ```bash
 python dump_bin.py dump_all \
@@ -435,53 +418,54 @@ python dump_bin.py dump_all \
   --file_suffix .csv
 ```
 
-含义：
+Meaning:
 
 ```text
-从 raw_data/1d_nor 读取原始 csv
-转换后写入 qlib_data
+Read raw CSV files from raw_data/1d_nor
+Convert them into Qlib format
+Write the output into qlib_data
 ```
 
-其中：
+The key distinction is:
 
 ```text
-data_path = 原始数据入口
-qlib_dir  = Qlib 标准数据输出目录
+data_path = input path for raw data
+qlib_dir  = output path for Qlib standard data
 ```
 
 ---
 
-## 3. `exclude_fields` / `include_fields` 的清洗
+## 2. Cleaning `exclude_fields` / `include_fields`
 
-代码：
+Code:
 
 ```python
 self._exclude_fields = tuple(filter(lambda x: len(x) > 0, map(str.strip, exclude_fields)))
 self._include_fields = tuple(filter(lambda x: len(x) > 0, map(str.strip, include_fields)))
 ```
 
-作用：
+Purpose:
 
 ```text
-把用户传入的字段列表清洗干净：
-1. 去掉前后空格
-2. 删除空字符串
-3. 转成 tuple
+Clean the user-provided field list:
+1. Remove leading and trailing spaces
+2. Remove empty strings
+3. Convert the result into a tuple
 ```
 
-例如：
+Example:
 
 ```python
 exclude_fields = "symbol, date, "
 ```
 
-先变成：
+After splitting:
 
 ```python
 ["symbol", " date", " "]
 ```
 
-清洗后：
+After cleaning:
 
 ```python
 ("symbol", "date")
@@ -489,22 +473,22 @@ exclude_fields = "symbol, date, "
 
 ---
 
-## 4. `self.df_files`：统一获得待处理文件列表
+## 3. `self.df_files`: getting the list of files to process
 
-代码：
+Code:
 
 ```python
 self.df_files = sorted(data_path.glob(f"*{self.file_suffix}") if data_path.is_dir() else [data_path])
 ```
 
-作用：
+Purpose:
 
 ```text
-如果 data_path 是目录，就找出目录下所有指定后缀文件；
-如果 data_path 是单个文件，就直接把它放进列表。
+If data_path is a directory, find all files with the specified suffix.
+If data_path is a single file, put that file directly into a list.
 ```
 
-例如：
+Example:
 
 ```text
 raw_data/1d_nor/
@@ -513,13 +497,13 @@ raw_data/1d_nor/
 └── SOLUSDT.csv
 ```
 
-则：
+Then:
 
 ```python
 self.df_files
 ```
 
-结果类似：
+will be similar to:
 
 ```python
 [
@@ -529,7 +513,7 @@ self.df_files
 ]
 ```
 
-这样后面代码就可以统一循环处理：
+This allows the later code to process everything in one unified loop:
 
 ```python
 for file_path in self.df_files:
@@ -538,9 +522,9 @@ for file_path in self.df_files:
 
 ---
 
-## 5. `instruments/all.txt` 的结构
+## 4. Structure of `instruments/all.txt`
 
-`instruments/all.txt` 内容类似：
+The `instruments/all.txt` file looks like this:
 
 ```text
 BTCUSDT	2023-01-01	2026-04-01
@@ -548,15 +532,15 @@ ETHUSDT	2023-01-01	2026-04-01
 SOLUSDT	2023-01-01	2026-04-01
 ```
 
-三列含义：
+The three columns mean:
 
 ```text
-symbol          = 标的代码
-start_datetime  = 最早有数据的日期
-end_datetime    = 最后有数据的日期
+symbol          = instrument code
+start_datetime  = first available date for this instrument
+end_datetime    = last available date for this instrument
 ```
 
-中间用 tab 分隔：
+The separator is a tab:
 
 ```python
 INSTRUMENTS_SEP = "\t"
@@ -564,9 +548,9 @@ INSTRUMENTS_SEP = "\t"
 
 ---
 
-## 6. `_read_instruments()`：读取已有 instruments 文件
+## 5. `_read_instruments()`: reading an existing instruments file
 
-代码：
+Code:
 
 ```python
 def _read_instruments(self, instrument_path: Path) -> pd.DataFrame:
@@ -582,38 +566,38 @@ def _read_instruments(self, instrument_path: Path) -> pd.DataFrame:
     return df
 ```
 
-作用：
+Purpose:
 
 ```text
-读取 qlib_data/instruments/all.txt，并手动指定列名。
+Read qlib_data/instruments/all.txt and manually assign column names.
 ```
 
-因为 `all.txt` 保存时没有 header，所以读回来必须加：
+Because `all.txt` is saved without a header, pandas needs explicit column names:
 
 ```python
 names=["symbol", "start_datetime", "end_datetime"]
 ```
 
-否则 pandas 不知道这三列分别叫什么。
+Otherwise pandas would not know what the three columns represent.
 
 ---
 
-## 7. `get_symbol_from_file()`：从文件名提取 symbol
+## 6. `get_symbol_from_file()`: extracting symbol from filename
 
-代码：
+Code:
 
 ```python
 def get_symbol_from_file(self, file_path: Path) -> str:
     return fname_to_code(file_path.stem.strip().lower())
 ```
 
-作用：
+Purpose:
 
 ```text
-从文件名里提取 symbol。
+Extract the symbol from the filename.
 ```
 
-例如：
+Examples:
 
 ```text
 BTCUSDT.csv -> btcusdt
@@ -621,19 +605,19 @@ ETHUSDT.csv -> ethusdt
 SOLUSDT.csv -> solusdt
 ```
 
-其中：
+Here:
 
 ```python
 file_path.stem
 ```
 
-表示：
+means:
 
 ```text
-文件名去掉后缀
+Filename without extension
 ```
 
-例如：
+Example:
 
 ```text
 BTCUSDT.csv -> BTCUSDT
@@ -641,9 +625,9 @@ BTCUSDT.csv -> BTCUSDT
 
 ---
 
-## 8. `data_merge_calendar()`：按全局 calendar 对齐单个 symbol 数据
+## 7. `data_merge_calendar()`: aligning one symbol to the global calendar
 
-代码：
+Code:
 
 ```python
 def data_merge_calendar(self, df: pd.DataFrame, calendars_list: List[pd.Timestamp]) -> pd.DataFrame:
@@ -662,13 +646,13 @@ def data_merge_calendar(self, df: pd.DataFrame, calendars_list: List[pd.Timestam
     return r_df
 ```
 
-核心作用：
+Core purpose:
 
 ```text
-把单个 symbol 的行情 df，按全局 Qlib calendar 对齐。
+Align a single symbol's DataFrame to the global Qlib calendar.
 ```
 
-例如全局 calendar：
+Example global calendar:
 
 ```text
 2025-01-01
@@ -676,7 +660,7 @@ def data_merge_calendar(self, df: pd.DataFrame, calendars_list: List[pd.Timestam
 2025-01-03
 ```
 
-原始 BTC 数据缺了 `2025-01-02`：
+Original BTC data is missing `2025-01-02`:
 
 ```text
 date        close
@@ -684,7 +668,7 @@ date        close
 2025-01-03  120
 ```
 
-对齐后：
+After alignment:
 
 ```text
 date        close
@@ -693,178 +677,181 @@ date        close
 2025-01-03  120
 ```
 
-意义：
+Meaning:
 
 ```text
-保证所有 symbol 都按照同一套 calendar 的位置写入 bin。
+All symbols are aligned to the same calendar positions before being written into .bin files.
 ```
 
 ---
 
-## 9. Qlib `.bin` 文件结构
+## 8. Qlib `.bin` file structure
 
-第一次全量写入时：
+During the first full dump, the code writes data like this:
 
 ```python
 np.hstack([date_index, _df[field]]).astype("<f").tofile(...)
 ```
 
-写入内容类似：
+The written content is conceptually:
 
 ```text
 [date_index, value1, value2, value3, ...]
 ```
 
-例如：
+Example:
 
 ```text
 [2.0, 100.0, 110.0, 120.0]
 ```
 
-含义：
+Meaning:
 
 ```text
-2.0      = 当前 symbol 的第一条数据从全局 calendar 的第 2 个位置开始
-100.0    = 第一个 close 值
-110.0    = 第二个 close 值
-120.0    = 第三个 close 值
+2.0      = the first data point of this symbol starts from position 2 in the global calendar
+100.0    = first close value
+110.0    = second close value
+120.0    = third close value
 ```
 
-也就是说：
+In other words:
 
 ```text
-bin 文件第一个值不是行情值，而是 date_index。
-后面的值才是真正的字段数据。
+The first value in a .bin file is not a market value.
+It is the date_index.
+The remaining values are the actual field data.
 ```
 
 ---
 
-## 10. update 模式 / 文件已存在
+## 9. Update mode / existing `.bin` file
 
-代码：
+Code:
 
 ```python
 with bin_path.open("ab") as fp:
     np.array(_df[field]).astype("<f").tofile(fp)
 ```
 
-其中：
+Here:
 
 ```text
 ab = append binary
 ```
 
-意思是：
+Meaning:
 
 ```text
-以二进制追加模式打开文件。
+Open the file in binary append mode.
 ```
 
-update 时只追加新数据，不再写 `date_index`。
+In update mode, Qlib only appends new values.
 
-原因：
+It does not write `date_index` again.
+
+Reason:
 
 ```text
-旧 .bin 文件开头已经有 date_index。
-增量更新时如果再写一次 date_index，文件结构就错了。
+The existing .bin file already has date_index at the beginning.
+If date_index were written again during an update, the file structure would become invalid.
 ```
 
 ---
 
-## 11. `date_range_list.append(...)` 的作用
+## 10. Purpose of `date_range_list.append(...)`
 
-代码：
+Code:
 
 ```python
 date_range_list.append(f"{self.INSTRUMENTS_SEP.join(_inst_fields)}")
 ```
 
-假设：
+Assume:
 
 ```python
 _inst_fields = ["BTCUSDT", "2023-01-01", "2026-04-01"]
 ```
 
-则：
+Then:
 
 ```python
 "\t".join(_inst_fields)
 ```
 
-得到：
+returns:
 
 ```text
 BTCUSDT	2023-01-01	2026-04-01
 ```
 
-加入 `date_range_list` 后，最后写入：
+After being appended to `date_range_list`, this line will eventually be written into:
 
 ```text
 qlib_data/instruments/all.txt
 ```
 
-也就是 instruments 文件中的一行。
+It becomes one row in the instruments file.
 
 ---
 
-## 12. `dump_all` 全量流程
+## 11. Full `dump_all` pipeline
 
-整体流程：
+Overall flow:
 
 ```text
 _dump_all
     │
     ├─ _get_all_date()
-    │     ├─ 扫描所有 csv/parquet
-    │     ├─ 收集所有日期
-    │     └─ 收集每个 symbol 的起止日期
+    │     ├─ Scan all csv/parquet files
+    │     ├─ Collect all dates
+    │     └─ Collect start/end date for each symbol
     │
     ├─ _dump_calendars()
-    │     └─ 生成 calendars/day.txt
+    │     └─ Generate calendars/day.txt
     │
     ├─ _dump_instruments()
-    │     └─ 生成 instruments/all.txt
+    │     └─ Generate instruments/all.txt
     │
     └─ _dump_features()
-          ├─ 遍历每个 symbol 文件
-          ├─ 读取完整行情 df
-          ├─ 按 calendar 对齐
-          └─ 每个字段写成 .bin
+          ├─ Iterate through each symbol file
+          ├─ Read full market data DataFrame
+          ├─ Align data to the global calendar
+          └─ Write each field into a .bin file
 ```
 
 ---
 
-## 13. 单个 symbol 写入 features 的核心链路
+## 12. Core chain for writing features of one symbol
 
-单个文件，例如：
+For one file, such as:
 
 ```text
 BTCUSDT.csv
 ```
 
-处理过程：
+The processing flow is:
 
 ```text
 BTCUSDT.csv
     ↓
-读取成 DataFrame
+Read into DataFrame
     ↓
-提取 code = btcusdt
+Extract code = btcusdt
     ↓
-删除重复 date
+Drop duplicate dates
     ↓
-创建 features/btcusdt/
+Create features/btcusdt/
     ↓
-按照全局 calendar 对齐
+Align to the global calendar
     ↓
-计算 date_index
+Calculate date_index
     ↓
-遍历字段 open/high/low/close/volume
+Iterate through fields: open/high/low/close/volume
     ↓
-每个字段写成一个 .bin
+Write each field into a separate .bin file
 ```
 
-最终生成：
+Final output:
 
 ```text
 qlib_data/features/btcusdt/open.day.bin
@@ -876,42 +863,37 @@ qlib_data/features/btcusdt/volume.day.bin
 
 ---
 
-## 14. 最终理解
+## 13. Final understanding
 
-`dump_bin.py` 的核心作用：
+The core role of `dump_bin.py` is:
 
 ```text
-把原始 CSV / Parquet 行情数据，
-转换成 Qlib 标准的 calendars + instruments + features/*.bin 结构。
+Convert raw CSV / Parquet market data
+into Qlib's standard calendars + instruments + features/*.bin structure.
 ```
 
-主链路可以压缩成：
+The main pipeline can be summarized as:
 
 ```text
 raw_data/*.csv
     ↓
-扫描文件列表
+Scan file list
     ↓
-生成全局 calendar
+Generate global calendar
     ↓
-生成 instruments/all.txt
+Generate instruments/all.txt
     ↓
-逐个 symbol 读取行情数据
+Read market data symbol by symbol
     ↓
-按全局 calendar 对齐
+Align each symbol to the global calendar
     ↓
-每个字段写成 .bin
+Write each field into .bin files
     ↓
 qlib_data/
 ```
 
-最终 Qlib 就可以通过：
+After this conversion, Qlib can read the crypto data through:
 
 ```python
 D.features(...)
-```
-
-读取这些 crypto 数据。
-
-```
 ```
