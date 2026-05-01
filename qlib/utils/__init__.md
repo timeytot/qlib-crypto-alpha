@@ -456,366 +456,256 @@ FLATTEN_TUPLE = "__flatten_tuple__"
 
 This is useful when you need to preserve the hierarchical structure of keys but don't want to use string concatenation.
 
+````markdown
 # Difference Between `bisect_left` and `bisect_right`
 
-https://github.com/microsoft/qlib/blob/main/qlib/utils/__init__.py#L436
+Prerequisite: the input array must be sorted in ascending order.
 
-Both functions are used to find the insertion position in a **sorted list**, but they behave differently when handling **duplicate values**.
+In Python, `bisect_left` and `bisect_right` are used to find insertion positions in a sorted array.
 
-### Core Difference
+Core rules:
 
-| Function | Insertion Position | With Duplicates |
-|----------|-------------------|-----------------|
-| **`bisect_left`** | Returns the first position where the element is **≥ target** | Inserts to the **left** of duplicates |
-| **`bisect_right`** | Returns the first position where the element is **> target** | Inserts to the **right** of duplicates |
+```text
+bisect_left(a, x)       = first position where value >= x
+bisect_right(a, x)      = first position where value > x
+bisect_right(a, x) - 1  = last position where value <= x
+````
 
-### Basic Example
+Another way to remember it:
+
+```text
+bisect_left  inserts x before existing equal values
+bisect_right inserts x after existing equal values
+```
+
+---
+
+## 1. Example: Target Value Exists
 
 ```python
 import bisect
 
-arr = [1, 3, 5, 5, 7, 9]  # Sorted list with two 5s
+a = [1, 2, 4, 4, 4, 6]
 
-# Find target 5
-pos_left = bisect.bisect_left(arr, 5)   # Returns 2 (position of first 5)
-pos_right = bisect.bisect_right(arr, 5)  # Returns 4 (position after last 5)
+print(bisect.bisect_left(a, 4))       # 2
+print(bisect.bisect_right(a, 4))      # 5
+print(bisect.bisect_right(a, 4) - 1)  # 4
 ```
 
-## Why Use `bisect_right - 1` for Left Alignment and `bisect_left` for Right Alignment?
+Position layout:
 
-This is designed to **find the nearest valid trading day** when the input date is not a trading day.
-
-### Core Logic
-
-| Alignment | Target Trading Day | Function Used | Reason |
-|-----------|-------------------|---------------|--------|
-| **left** | Maximum value ≤ trading_date | `bisect_right - 1` | Find the nearest day on the left (including the input day itself) |
-| **right** | Minimum value ≥ trading_date | `bisect_left` | Find the nearest day on the right (including the input day itself) |
-
-### Visual Understanding with Calendar
-
-```python
-cal = ['02-13', '02-14', '02-17', '02-18', '02-19']  # Trading days
-#       0        1        2        3        4
+```text
+index: 0  1  2  3  4  5
+value: 1  2  4  4  4  6
+            ↑        ↑
+      left=2     right-1=4
 ```
 
-#### Case 1: Input is a Trading Day
+Explanation:
 
-```python
-trading_date = '02-14'  # Itself is a trading day
+```text
+bisect_left(a, 4) = 2
+This is the first position where value >= 4.
 
-# Left alignment
-pos = bisect.bisect_right(cal, '02-14')  # Returns 2
-_index = 2 - 1 = 1  # Still '02-14' ✓
+bisect_right(a, 4) = 5
+This is the first position where value > 4.
 
-# Right alignment
-pos = bisect.bisect_left(cal, '02-14')   # Returns 1
-_index = 1  # Still '02-14' ✓
-```
-
-#### Case 2: Input is a Non-Trading Day (in the middle)
-
-```python
-trading_date = '02-15'  # Sunday, non-trading day
-
-# Left alignment (find the nearest day on the left)
-# Use bisect_right to find the first position > 02-15
-pos = bisect.bisect_right(cal, '02-15')  # Returns 2 (pointing to '02-17')
-_index = 2 - 1 = 1  # Gets '02-14' ✓ (nearest left)
-
-# Right alignment (find the nearest day on the right)
-# Use bisect_left to find the first position ≥ 02-15
-pos = bisect.bisect_left(cal, '02-15')   # Returns 2 (pointing to '02-17')
-_index = 2  # Gets '02-17' ✓ (nearest right)
-```
-
-#### Case 3: Input is Before the First Trading Day
-
-```python
-trading_date = '02-12'  # Earlier than the first trading day
-
-# Left alignment
-pos = bisect.bisect_right(cal, '02-12')  # Returns 0
-_index = 0 - 1 = -1  # Out of bounds (needs handling)
-
-# Right alignment
-pos = bisect.bisect_left(cal, '02-12')   # Returns 0
-_index = 0  # Gets '02-13' ✓ (first trading day)
-```
-
-#### Case 4: Input is After the Last Trading Day
-
-```python
-trading_date = '02-20'  # Later than the last trading day
-
-# Left alignment
-pos = bisect.bisect_right(cal, '02-20')  # Returns 5
-_index = 5 - 1 = 4  # Gets '02-19' ✓ (last trading day)
-
-# Right alignment
-pos = bisect.bisect_left(cal, '02-20')   # Returns 5
-_index = 5  # Out of bounds (needs handling)
-```
-
-### Why This Design?
-
-| Alignment | Target | Using `bisect_right` | Using `bisect_left` |
-|----------|--------|---------------------|---------------------|
-| **left** | Maximum value ≤ x | `bisect_right(x)-1` gives exactly this | `bisect_left(x)` gives the first value ≥ x, which doesn't match |
-| **right** | Minimum value ≥ x | `bisect_right(x)` gives the first value > x, which doesn't match | `bisect_left(x)` gives exactly this |
-
-### Summary
-
-- **Left alignment**: To move left, use `bisect_right` to find the right boundary, then step back one position
-- **Right alignment**: To move right, use `bisect_left` to directly find the starting point on the right
-
-# Qlib Expression Parsing: From User-Friendly Syntax to Executable Code
-
-**Reference**: [https://github.com/microsoft/qlib/blob/main/qlib/utils/__init__.py#L277](https://github.com/microsoft/qlib/blob/main/qlib/utils/__init__.py#L277)
-
-This document explains how Qlib transforms user-friendly expression strings (like `$close`, `$$roe_q`, `Mean($close,5)`) into executable Python code.
-
-## Overview
-
-The parsing system converts three types of patterns:
-
-| Pattern | Description | Example | Converted To |
-|---------|-------------|---------|--------------|
-| `$$name` | PIT (Point-in-Time) features | `$$roe_q` | `PFeature("roe_q")` |
-| `$name` | Basic features | `$close` | `Feature("close")` |
-| `func(...)` | Function calls | `Mean($close,5)` | `Operators.Mean(...)` |
-
-## Code Structure
-
-```python
-(
-    rf"\$\$([\w{chinese_punctuation_regex}]+)",  # Pattern 1: PIT features ($$)
-    r'PFeature("\1")',                            # Replacement 1
-),
-(
-    rf"\$([\w{chinese_punctuation_regex}]+)",    # Pattern 2: Basic features ($)
-    r'Feature("\1")',                             # Replacement 2
-),
-(
-    r"(\w+\s*)\(",                                 # Pattern 3: Function calls
-    r"Operators.\1(",                              # Replacement 3
-),
-```
-
-Each is a tuple containing:
-- **Pattern**: Regular expression to match
-- **Replacement**: String to replace with
-
----
-
-## Pattern 1: PIT Features ($$)
-
-### Pattern Details
-
-```python
-rf"\$\$([\w{chinese_punctuation_regex}]+)"
-```
-
-**Breakdown:**
-
-| Part | Description | Example Match |
-|------|-------------|---------------|
-| `r` | Raw string (prevents escape) | - |
-| `f` | f-string (allows variable embedding) | embeds `chinese_punctuation_regex` |
-| `\$\$` | Matches two dollar signs | `$$` |
-| `(` | Start capture group | Captures feature name |
-| `[\w{chinese_punctuation_regex}]` | Character class | Letters, digits, underscore, Chinese punctuation |
-| `+` | One or more times | Matches one or more characters |
-| `)` | End capture group | - |
-
-### Chinese Punctuation Support
-
-```python
-chinese_punctuation_regex = r"\u3001\uff1a\uff08\uff09"
-```
-
-This includes:
-- `\u3001` → `、` (Chinese comma/ideographic comma)
-- `\uff1a` → `：` (Fullwidth colon)
-- `\uff08` → `（` (Fullwidth left parenthesis)
-- `\uff09` → `）` (Fullwidth right parenthesis)
-
-### Expanded Regex
-
-```python
-r"\$\$([\w\u3001\uff1a\uff08\uff09]+)"
-```
-
-This matches:
-- Starting with `$$`
-- Followed by one or more of:
-  - `\w`: letters, digits, underscore
-  - `\u3001`: `、`
-  - `\uff1a`: `：`
-  - `\uff08`: `（`
-  - `\uff09`: `）`
-
-### Replacement Pattern
-
-```python
-r'PFeature("\1")'
-```
-
-| Part | Description |
-|------|-------------|
-| `r` | Raw string |
-| `PFeature` | PIT feature class name |
-| `"\1"` | References first capture group content |
-| `()` | Function call parentheses |
-
-### Example: PIT Feature with Chinese Punctuation
-
-```python
-# Input
-field = "$$资产负债率：最新_q"
-
-# Matching process:
-# "\$\$" matches "$$"
-# "([\w\u3001\uff1a\uff08\uff09]+)" captures "资产负债率：最新_q"
-#   ├─ "资产负债率" → \w
-#   ├─ "：" → \uff1a
-#   └─ "最新_q" → \w
-# Capture group \1 = "资产负债率：最新_q"
-
-# Replacement: 'PFeature("\1")' → 'PFeature("资产负债率：最新_q")'
-
-# Result
-field = 'PFeature("资产负债率：最新_q")'
+bisect_right(a, 4) - 1 = 4
+This is the last position where value <= 4.
 ```
 
 ---
 
-## Pattern 2: Basic Features ($)
-
-### Pattern Details
+## 2. Example: Target Value Does Not Exist
 
 ```python
-rf"\$([\w{chinese_punctuation_regex}]+)"
+import bisect
+
+a = [1, 2, 4, 6]
+
+print(bisect.bisect_left(a, 3))   # 2
+print(bisect.bisect_right(a, 3))  # 2
 ```
 
-**Breakdown:**
+Position layout:
 
-| Part | Description | Example Match |
-|------|-------------|---------------|
-| `\$` | Matches single dollar sign | `$` |
-| `(` | Start capture group | Captures feature name |
-| `[\w{chinese_punctuation_regex}]` | Character class | Letters, digits, underscore, Chinese punctuation |
-| `+` | One or more times | Matches one or more characters |
-| `)` | End capture group | - |
-
-### Replacement Pattern
-
-```python
-r'Feature("\1")'
+```text
+index: 0  1  2  3
+value: 1  2  4  6
+            ↑
+      insert position = 2
 ```
 
-- `Feature`: Basic feature class name
-- `"\1"`: References first capture group content
+Because `3` does not exist in the array, `bisect_left(a, 3)` and `bisect_right(a, 3)` return the same position.
 
-### Example: Basic Feature with Chinese Punctuation
+Both mean:
 
-```python
-# Input
-field = "$资产负债率：最新"
-
-# Captures "资产负债率：最新" → replaced with 'Feature("资产负债率：最新")'
-# Result
-field = 'Feature("资产负债率：最新")'
+```text
+3 should be inserted between 2 and 4, at index 2.
 ```
 
 ---
 
-## Pattern 3: Function Calls
+## 3. Meaning in Qlib `get_date_by_shift()`
 
-### Pattern Details
+Qlib uses similar logic in `get_date_by_shift()`:
 
 ```python
-r"(\w+\s*)\("
+elif align == "left":
+    _index = bisect.bisect_right(cal, trading_date) - 1
+
+elif align == "right":
+    _index = bisect.bisect_left(cal, trading_date)
 ```
 
-**Breakdown:**
+Here, `cal` is a sorted trading calendar.
 
-| Part | Description | Example Match |
-|------|-------------|---------------|
-| `(` | Start capture group | Captures function name |
-| `\w+` | One or more word characters | `Mean`, `Ref`, `Sum` |
-| `\s*` | Zero or more spaces | Allows spaces after function name |
-| `)` | End capture group | - |
-| `\(` | Matches left parenthesis | `(` |
+---
 
-### Replacement Pattern
+## 4. `align="left"`
 
 ```python
-r"Operators.\1("
+_index = bisect.bisect_right(cal, trading_date) - 1
 ```
 
-- `Operators`: Operator class name (contains all built-in functions)
-- `.\1`: Dot plus captured function name
-- `(`: Preserves left parenthesis
+Meaning:
 
-### Example: Function Call
+```text
+Find the last trading date <= trading_date.
+```
+
+In other words:
+
+```text
+If trading_date itself is a trading date, use it.
+If trading_date is not a trading date, align it to the nearest trading date on the left.
+```
+
+Example:
 
 ```python
-# Assuming previous replacements have been applied
-field = "Mean(Feature(\"close\"), 5)"
+cal = [
+    "2025-01-01",
+    "2025-01-02",
+    "2025-01-04",
+    "2025-01-05",
+]
+```
 
-# Matching process:
-# "(\w+\s*)" captures "Mean"
-# "\(" matches "("
-# Capture group \1 = "Mean"
+If:
 
-# Replacement: 'Operators.\1(' → 'Operators.Mean('
+```python
+trading_date = "2025-01-03"
+```
 
-# Result
-field = 'Operators.Mean(Feature("close"), 5)'
+Then:
+
+```python
+bisect.bisect_right(cal, "2025-01-03") - 1
+```
+
+points to:
+
+```text
+2025-01-02
+```
+
+So:
+
+```text
+align="left" => align to 2025-01-02
 ```
 
 ---
 
-## Complete Transformation Example
+## 5. `align="right"`
 
-### Input
 ```python
-expr = "Mean($close, 5) > $open and $$roe_q > 0.1"
+_index = bisect.bisect_left(cal, trading_date)
 ```
 
-### Step 1: PIT Features ($$)
-```python
-# After pattern 1
-expr = "Mean($close, 5) > $open and PFeature(\"roe_q\") > 0.1"
+Meaning:
+
+```text
+Find the first trading date >= trading_date.
 ```
 
-### Step 2: Basic Features ($)
-```python
-# After pattern 2
-expr = "Mean(Feature(\"close\"), 5) > Feature(\"open\") and PFeature(\"roe_q\") > 0.1"
+In other words:
+
+```text
+If trading_date itself is a trading date, use it.
+If trading_date is not a trading date, align it to the nearest trading date on the right.
 ```
 
-### Step 3: Function Calls
+Using the same trading calendar:
+
 ```python
-# After pattern 3
-expr = "Operators.Mean(Feature(\"close\"), 5) > Feature(\"open\") and PFeature(\"roe_q\") > 0.1"
+cal = [
+    "2025-01-01",
+    "2025-01-02",
+    "2025-01-04",
+    "2025-01-05",
+]
 ```
 
-### Final Executable Expression
+If:
+
 ```python
-# This can now be evaluated to create expression objects
-expression = eval(expr)
-# expression is now a callable object that can load data
-data = expression.load("SH600000", start_index, end_index, "day")
+trading_date = "2025-01-03"
 ```
 
-## Summary
+Then:
 
-The parsing system transforms:
+```python
+bisect.bisect_left(cal, "2025-01-03")
+```
 
-| Original Syntax | Converted To | Purpose |
-|-----------------|--------------|---------|
-| `$$feature` | `PFeature("feature")` | PIT (point-in-time) data |
-| `$feature` | `Feature("feature")` | Basic feature data |
-| `func(...)` | `Operators.func(...)` | Function calls |
+points to:
+
+```text
+2025-01-04
+```
+
+So:
+
+```text
+align="right" => align to 2025-01-04
+```
+
+---
+
+## 6. Summary
+
+```text
+bisect_left(a, x)
+= first position where value >= x
+
+bisect_right(a, x)
+= first position where value > x
+
+bisect_right(a, x) - 1
+= last position where value <= x
+```
+
+In Qlib:
+
+```text
+align="left"
+= find the nearest trading date on the left
+= last trading date <= trading_date
+
+align="right"
+= find the nearest trading date on the right
+= first trading date >= trading_date
+```
+
+Core memory:
+
+```text
+left      = insert on the left side of equal values / find first >= x
+right     = insert on the right side of equal values / find first > x
+right - 1 = move back to the last <= x
+```
+
+```
+```
