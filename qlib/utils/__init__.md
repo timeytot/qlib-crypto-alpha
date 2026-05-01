@@ -458,6 +458,8 @@ This is useful when you need to preserve the hierarchical structure of keys but 
 
 # `bisect_left` vs `bisect_right`
 
+Source: [https://github.com/microsoft/qlib/blob/main/qlib/utils/__init__.py#L436](https://github.com/microsoft/qlib/blob/main/qlib/utils/__init__.py#L436)
+
 ## Core Idea
 
 Prerequisite: the input array must be sorted in ascending order.
